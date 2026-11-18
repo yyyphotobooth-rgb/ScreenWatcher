@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ScreenWatcher/ScreenWatcher.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ScreenWatcher.Tests/ScreenWatcher.Tests.csproj" />
+  </Folder>
+</Solution>
