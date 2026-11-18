@@ -142,9 +142,9 @@ public sealed class MainForm : Form
         var h2 = MakeLabel("เตือนที่", Theme.Small, Theme.Muted, Theme.Surface, ContentAlignment.MiddleCenter);
         var h3 = MakeLabel("ตอนนี้", Theme.Small, Theme.Muted, Theme.Surface, ContentAlignment.MiddleRight);
         // Mockup: padding 0 14px, gap 12px, first label padded 30px (checkbox width + gap).
-        int c3 = tableW - S(14) - S(72), c2 = c3 - S(12) - S(92);
+        int c3 = tableW - S(14) - S(72), c2 = c3 - S(12) - S(100);
         h1.SetBounds(S(14) + S(30), 0, c2 - S(12) - S(44), S(33));
-        h2.SetBounds(c2, 0, S(92), S(33));
+        h2.SetBounds(c2, 0, S(52), S(33));
         h3.SetBounds(c3, 0, S(72), S(33));
         colHeader.Controls.AddRange([h1, h2, h3]);
         table.Controls.Add(colHeader);

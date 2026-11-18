@@ -209,20 +209,21 @@ sealed class AlertRow : Control
     protected override void OnLayout(LayoutEventArgs e)
     {
         base.OnLayout(e);
-        // Mockup: padding 0 14px, gap 12px; checkbox 18; threshold column 92; now column 72.
+        // Mockup: padding 0 14px, gap 12px; checkbox 18; threshold column 100 (box 52 + unit; wide
+        // enough for "กล่อง" on one line); now column 72.
         int pad = S(14), gap = S(12), h = Height;
         int x = pad;
         _check.SetBounds(x, (h - S(18)) / 2, S(18), S(18));
         x += S(18) + gap;
-        int nowW = S(72), thrW = S(92);
+        int nowW = S(72), thrW = S(100);
         int nowX = Width - pad - nowW;
         _now.SetBounds(nowX, 0, nowW, h);
         int labelRight = nowX - gap;
         if (_threshold is not null)
         {
             int tx = nowX - gap - thrW;
-            _threshold.SetBounds(tx, (h - S(32)) / 2, S(56), S(32));
-            _unit!.SetBounds(tx + S(56) + S(6), 0, thrW - S(62), h);
+            _threshold.SetBounds(tx, (h - S(32)) / 2, S(52), S(32));
+            _unit!.SetBounds(tx + S(52) + S(5), 0, thrW - S(57), h);
             labelRight = tx - gap;
         }
         if (_reachedOn || _chooserOn)
