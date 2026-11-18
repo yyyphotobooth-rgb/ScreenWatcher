@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, DeathConfig Death)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death)
 {
     public const string FileName = "detectors.json";
 
@@ -23,6 +23,23 @@ public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, Drop
 public sealed record WindowConfig(string TitlePrefix, string[] ExcludeTitles);
 
 public sealed record DropConfig(int MissingChecksToFire, string Message);
+
+/// <summary>Gauge outer-ring locator. Ring geometry is in the 1.0 layout, continuous client
+/// coordinates (pixel i spans [i, i+1)).</summary>
+public sealed record HudScaleConfig(
+    double[] RingCenter,
+    double RingOuterRadius,
+    double RingInnerRadius,
+    double EdgeProbePx,
+    int Angles,
+    double MinScale,
+    double MaxScale,
+    double CoarseStep,
+    double RefineRange,
+    double RefineStep,
+    double MinScore,
+    double MinPeakToMean,
+    int RetryEveryPolls);
 
 public sealed record DeathConfig(string Message, double HoldSeconds, GaugeConfig Gauge, DialogConfig Dialog);
 

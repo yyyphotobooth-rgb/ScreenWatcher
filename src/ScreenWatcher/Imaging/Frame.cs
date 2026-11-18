@@ -47,6 +47,25 @@ public sealed class Frame
         finally { bitmap.UnlockBits(data); }
     }
 
+    /// <summary>Copies a BGRA pixel block (e.g. a mapped GPU staging texture) into the reused buffer.</summary>
+    public void CopyFromBgra(IntPtr source, int stride, int width, int height)
+    {
+        if (width <= 0 || height <= 0) throw new ArgumentException("Empty source.");
+        Width = width;
+        Height = height;
+        int rowBytes = Width * 4;
+        if (_px.Length != rowBytes * Height) _px = new byte[rowBytes * Height];
+        for (int y = 0; y < Height; y++)
+            Marshal.Copy(source + y * stride, _px, y * rowBytes, rowBytes);
+    }
+
+    /// <summary>One pixel (no bounds check beyond the array's own).</summary>
+    public Rgb Pixel(int x, int y)
+    {
+        int i = (y * Width + x) * 4;
+        return new Rgb(_px[i + 2], _px[i + 1], _px[i]);
+    }
+
     /// <summary>Mean colour of the rectangle (clipped to the frame); null if nothing is inside.</summary>
     public Rgb? Mean(int x, int y, int w, int h)
     {

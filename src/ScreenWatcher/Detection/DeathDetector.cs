@@ -15,7 +15,9 @@ public sealed class DeathDetector(DeathConfig config) : IFrameDetector
 
     public bool Armed { get; private set; } = true;
 
-    public WatchEvent? Process(Frame frame, DateTime now) => Update(_analyzer.Analyze(frame), now);
+    public WatchEvent? Process(Frame frame, DateTime now) => Process(frame, HudScale.One, now);
+
+    public WatchEvent? Process(Frame frame, HudScale scale, DateTime now) => Update(_analyzer.Analyze(frame, scale), now);
 
     public WatchEvent? Update(DeathObservation o, DateTime now)
     {

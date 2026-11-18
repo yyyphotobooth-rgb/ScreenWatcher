@@ -26,6 +26,23 @@ static class TestData
         return Frame.FromBitmap(bmp, new Rectangle(x, y, w, h));
     }
 
+    /// <summary>
+    /// Cut a game client area out of a full-desktop screenshot. The client may extend past the
+    /// screenshot (window larger than the screen); the missing part is filled black so the frame
+    /// keeps the real client size (the dialog is centred on the real client).
+    /// </summary>
+    public static Frame DesktopClientFrame(string file, int x, int y, int w, int h)
+    {
+        using var shot = new Bitmap(Path.Combine(SamplesDir, file));
+        using var client = new Bitmap(w, h);
+        using (var g = Graphics.FromImage(client))
+        {
+            g.Clear(Color.Black);
+            g.DrawImage(shot, new Rectangle(0, 0, w, h), new Rectangle(x, y, w, h), GraphicsUnit.Pixel);
+        }
+        return Frame.FromBitmap(client, new Rectangle(0, 0, w, h));
+    }
+
     /// <summary>A gauge-only crop placed at its client offset on a black 1024x768 client.</summary>
     public static Frame CropOnBlackClient(string file, int clientX, int clientY)
     {

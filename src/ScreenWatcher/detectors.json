@@ -16,14 +16,41 @@
     "message": "เกมส์หลุด"
   },
 
+  "hudScale": {
+    // The game scales its whole HUD about the client top-left (1.0 up to 1080 px client height,
+    // larger above). The scale is MEASURED, not computed from the resolution: the gauge's outer
+    // ring is searched for and its size gives the scale (X and Y separately; the OS can squeeze a
+    // window taller than the screen). Every gauge/dialog coordinate below is the 1.0 layout and is
+    // multiplied by the measured scale. Ring at 1.0 (samples/live_printwindow.png): left edge
+    // x~7.9, right ~156.1, top ~30.7, bottom ~178.2, i.e. outer diameter ~148 px; band ~7.7 px.
+    "ringCenter": [ 82.0, 104.45 ],
+    "ringOuterRadius": 74.0,
+    "ringInnerRadius": 66.3,
+    // Colour is compared this many screen pixels either side of each ring boundary.
+    "edgeProbePx": 1.5,
+    "angles": 120,
+    "minScale": 0.8,
+    "maxScale": 2.2,
+    "coarseStep": 0.01,
+    "refineRange": 0.03,
+    "refineStep": 0.0025,
+    // Ring "found" when the mean edge strength reaches minScore and the peak stands out from the
+    // average over all candidate scales by minPeakToMean. Samples: ring present 203..383
+    // (peak/mean 4.1..6.4); no gauge at the top-left <= 72 (HudScaleTests).
+    "minScore": 120,
+    "minPeakToMean": 2.5,
+    // While the ring is not found at the current size, retry every N polls (keep last good scale).
+    "retryEveryPolls": 5
+  },
+
   "death": {
     "message": "ตายแล้ว",
     // Gauge dark AND dialog present continuously for at least this long.
     "holdSeconds": 1.5,
 
     "gauge": {
-      // Fixed position at every window size. Gauge centre (82,104); outer ring diameter ~147 px
-      // (ignored). HP band (left, red) and right band (blue) form an annulus r = 40..64.
+      // 1.0 layout (multiplied by the measured hudScale; patch size scales too). Gauge centre
+      // (82,104); outer ring diameter ~148 px (used by hudScale). HP band (left, red) and right band (blue) form an annulus r = 40..64.
       // Patches are centred on r = 52 at 30/60/120/150 degrees from vertical, avoiding the
       // number text at 90 degrees and the centre fuel disc.
       "patchSize": 6,
@@ -40,7 +67,8 @@
     },
 
     "dialog": {
-      // Dark navy "return to town?" box, 376x95 px, spans x -189..+186 and y -44..+50 from the
+      // 1.0 layout: offsets and patch size are multiplied by the measured hudScale; the box stays
+      // centred on the client. Dark navy "return to town?" box, 376x95 px at 1.0, spans x -189..+186 and y -44..+50 from the
       // client centre (W/2, H/2). Patches sit in the plain body, away from text and buttons.
       "patchWidth": 16,
       "patchHeight": 6,

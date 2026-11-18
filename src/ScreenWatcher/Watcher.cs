@@ -14,9 +14,10 @@ public sealed class Watcher : IDisposable
 {
     readonly WatcherConfig _config;
     readonly GameWindowFinder _finder;
-    readonly PrintWindowCapture _capture = new();
+    readonly WgcCapture _capture = new();
     readonly Frame _frame = new();
     readonly GameDropDetector _drop;
+    readonly HudScaleTracker _scale;
     readonly IReadOnlyList<IFrameDetector> _frameDetectors;
     System.Threading.Timer? _timer;
     volatile bool _paused;
@@ -31,6 +32,7 @@ public sealed class Watcher : IDisposable
         _config = config;
         _finder = new GameWindowFinder(config.Window);
         _drop = new GameDropDetector(config.Drop);
+        _scale = new HudScaleTracker(config.HudScale);
         _frameDetectors = [new DeathDetector(config.Death)];
     }
 
@@ -60,12 +62,13 @@ public sealed class Watcher : IDisposable
             switch (_capture.Capture(hwnd, _frame))
             {
                 case CaptureResult.Minimized: NoFrame("Game: found (minimised - cannot see it)"); return;
-                case CaptureResult.Failed: NoFrame("Game: found (capture failed)"); return;
+                case CaptureResult.Failed: NoFrame($"Game: found (capture failed: {_capture.LastError})"); return;
             }
             if (_frame.LooksBlank()) { NoFrame("Game: found (capture is black)"); return; }
 
-            SetStatus($"Game: found ({_frame.Width}x{_frame.Height})");
-            foreach (var d in _frameDetectors) Raise(d.Process(_frame, now));
+            var scale = _scale.Update(_frame);
+            SetStatus($"Game: found ({_frame.Width}x{_frame.Height}), {_scale.Describe()}");
+            foreach (var d in _frameDetectors) Raise(d.Process(_frame, scale, now));
         }
         catch (Exception ex)
         {

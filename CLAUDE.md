@@ -16,7 +16,8 @@ and raises events (death, game dropped).
 ## Layout
 - `src/ScreenWatcher/detectors.json`: every detector threshold and region (single source of truth;
   the tests load the same file).
-- `src/ScreenWatcher/Capture`: window finder + PrintWindow(PW_RENDERFULLCONTENT) capture.
+- `src/ScreenWatcher/Capture`: window finder + Windows.Graphics.Capture (WGC) window capture, client area cropped from the
+  captured frame. PrintWindow is not used (it made the game flash white).
 - `src/ScreenWatcher/Detection`: `IFrameDetector` (add new frame detectors here, e.g. ammo), death
   analyzer + detector, game-drop detector.
 - `samples/`: reference images and their classification (`samples/README.md`).

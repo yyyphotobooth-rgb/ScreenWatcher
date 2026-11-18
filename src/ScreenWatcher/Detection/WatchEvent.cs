@@ -10,8 +10,9 @@ public sealed record WatchEvent(WatchEventKind Kind, string Message, DateTime Ti
 /// </summary>
 public interface IFrameDetector
 {
-    /// <summary>Called once per poll with a fresh frame. Returns an event when one fires.</summary>
-    WatchEvent? Process(Imaging.Frame frame, DateTime now);
+    /// <summary>Called once per poll with a fresh frame and the measured HUD scale (config
+    /// coordinates are the 1.0 layout). Returns an event when one fires.</summary>
+    WatchEvent? Process(Imaging.Frame frame, HudScale scale, DateTime now);
 
     /// <summary>Called when frames stop arriving (paused, minimised, game gone) so hold timers restart.</summary>
     void ResetTiming();
