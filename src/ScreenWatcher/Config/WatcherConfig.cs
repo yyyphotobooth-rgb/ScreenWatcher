@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items)
 {
     public const string FileName = "detectors.json";
 
@@ -136,3 +136,27 @@ public sealed record FuelConfig(
 /// polls with no digits. Re-arms when a confirmed value is below RearmBelow.</summary>
 public sealed record KillConfig(
     string Message, string CropRegion, int StablePolls, int Target, int NearTarget, int RearmBelow, int MaxStepPerPoll, DigitFieldConfig Field);
+
+/// <summary>Item bar (Detection/Hud/ItemBar.cs). Slot k's frame starts at
+/// (W/2 + SlotLeft + SlotPitch * k, H + SlotTop) in the 1.0 layout; its interior is 28x28, one
+/// pixel in. Icons are looked for +-SearchPx around that (SearchPxScaled on a stretched HUD) and
+/// accepted when the mean colour difference over IconRows cells ([rowFrom, rowTo, colFrom, colTo]
+/// of the 14x14 grid) is at most IconMaxDistance. Count digits: pure white (>= CountWhiteMin)
+/// pixels whose four neighbours are white or outline (<= CountDarkMax), in a box CountBoxWidth
+/// left of the icon's right edge; CountGlyphs holds the ten 8-row digit bitmaps seen at 1.0, and
+/// CountFontFace at character heights CountFontMinHeight..MaxHeight is rendered for other scales.
+/// The bar counts as visible when an icon was found or FrameMinRuns runs of FrameMinRun
+/// frame-blue pixels lie on one row at the slots' top edge.</summary>
+public sealed record ItemsConfig(
+    int StablePolls, int GoneStablePolls, string CropRegion, string LowMessage, string GoneMessage,
+    int Slots, double SlotLeft, double SlotPitch, double SlotTop, int SearchPx, int SearchPxScaled,
+    double IconMaxDistance, int[][] IconRows, int MarkMinSaturation, int MarkMinCells, double MarkOrangeMinGOverR,
+    int CountBoxWidth, int CountBoxHeight, int CountWhiteMin, int CountDarkMax, Dictionary<string, string[]> CountGlyphs,
+    string CountFontFace, int CountFontMinHeight, int CountFontMaxHeight,
+    int FrameMaxR, int[] FrameG, int[] FrameB, int FrameMinRun, int FrameMinRuns,
+    ItemDef[] Items);
+
+/// <summary>A watched item: alert row id, Thai name and unit, default threshold, the icon
+/// pictures (icons.json) that show it, for potions the mark colour (red / blue / orange), and
+/// optionally its own icon distance limit (else ItemsConfig.IconMaxDistance).</summary>
+public sealed record ItemDef(string Id, string Name, string Unit, int DefaultThreshold, string[] Icons, string? Mark = null, double? MaxDistance = null);

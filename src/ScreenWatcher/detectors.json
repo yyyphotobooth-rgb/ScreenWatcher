@@ -261,5 +261,63 @@
     "maxStepPerPoll": 12,
     "field": { "anchor": "topRight", "cellX": [ -129, -110, -91 ], "y": 333, "glyphs": "kill", "inks": [ "kill" ],
                "searchPx": 2, "minScore": 0.6, "minMargin": 0.03, "allowBlank": true, "blankInk": 6 }
+  },
+
+  "items": {
+    // Bottom-centre bar: ten 30x30 slot frames at exactly 31 px pitch, first frame at x c-161,
+    // frames y H-47..H-18 (1024x768, 1440x1080, 1600x1024 and 1920x1080 clients: same offsets).
+    // Icons are opaque and pixel-identical in all 235 collected crops (also while potions are
+    // being used). At HUD scale ~1.3 (one sample) the slot pitch is 41 px, slightly more than
+    // 31 x the gauge scale, hence the wider search there.
+    "stablePolls": 2,
+    // "Icon gone" needs the bar visible and the icon missing for this many polls in a row.
+    "goneStablePolls": 3,
+    "cropRegion": "items",
+    "lowMessage": "{0}เหลือ {1} {2}",
+    "goneMessage": "{0}หมด",
+    "slots": 10, "slotLeft": -161, "slotPitch": 31, "slotTop": -47,
+    "searchPx": 1, "searchPxScaled": 5,
+    // Mean colour difference per channel over the compared cells. Same icon: 0 at 1.0, up to 17
+    // when stretched 1.15..1.5x; a different item or any other slot content: 42 or more. (The
+    // three potion kits are 13..23 apart, which is why their type comes from the mark colour.)
+    // An EMPTY slot over green scenery comes as close as 23 to the (mostly teal) bottle icon, so
+    // the bottle has its own tighter limit (true bottle: 8 or less).
+    "iconMaxDistance": 20,
+    // Cells (2x2 px each) never covered by overlays: rows 5..8 across the slot, and the two
+    // centre columns below. The count covers the top rows, the hotkey digit the bottom-left and
+    // the grade letter (or "FULL") the bottom.
+    "iconRows": [ [ 5, 8, 0, 13 ], [ 9, 13, 6, 7 ] ],
+    // Potion kits: mark colour from cells whose max-min channel spread is at least this.
+    // Marks measured: red (233,44,42), blue (42,81,233), orange (246,163,66).
+    "markMinSaturation": 90, "markMinCells": 2, "markOrangeMinGOverR": 0.42,
+    // Count: pure white digits on a black outline, right-aligned at the slot's top-right, up to
+    // 4 digits (seen: 1733). It is Windows' Tahoma without smoothing: character height 11 px at
+    // HUD scale 1.0 (digits 5x8, the "1" is 3 wide) and 15 px in the ~1.3 sample (digits 11 rows
+    // tall). The text is drawn at that size, not stretched, so digits are matched pixel-exactly;
+    // the shapes for the other sizes are rendered from the font at start-up (CountFont.cs).
+    "countBoxWidth": 27, "countBoxHeight": 14, "countWhiteMin": 250, "countDarkMax": 70,
+    "countFontFace": "Tahoma", "countFontMinHeight": 9, "countFontMaxHeight": 26,
+    "countGlyphs": {
+      "0": [ ".###.", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###." ],
+      "1": [ ".#.", "##.", ".#.", ".#.", ".#.", ".#.", ".#.", "###" ],
+      "2": [ ".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#....", "#####" ],
+      "3": [ ".###.", "#...#", "....#", "..##.", "....#", "....#", "#...#", ".###." ],
+      "4": [ "...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#.", "...#." ],
+      "5": [ "#####", "#....", "#....", "####.", "....#", "....#", "#...#", ".###." ],
+      "6": [ "..##.", ".#...", "#....", "####.", "#...#", "#...#", "#...#", ".###." ],
+      "7": [ "#####", "....#", "...#.", "...#.", "..#..", "..#..", ".#...", ".#..." ],
+      "8": [ ".###.", "#...#", "#...#", ".###.", "#...#", "#...#", "#...#", ".###." ],
+      "9": [ ".###.", "#...#", "#...#", "#...#", ".####", "....#", "...#.", ".##.." ]
+    },
+    // Slot frame blue (5..7, 93..99, 168..178); a selected slot's frame is orange instead.
+    "frameMaxR": 40, "frameG": [ 70, 125 ], "frameB": [ 140, 200 ], "frameMinRun": 12, "frameMinRuns": 5,
+    "items": [
+      { "id": "ammoBox", "name": "กล่องเติมกระสุน", "unit": "กล่อง", "defaultThreshold": 5, "icons": [ "ammoBox" ] },
+      { "id": "fuelBottles", "name": "ขวดน้ำมัน", "unit": "ขวด", "defaultThreshold": 2, "icons": [ "bottle" ], "maxDistance": 13 },
+      { "id": "monsterCard", "name": "บัตรกันมอน", "unit": "ใบ", "defaultThreshold": 3, "icons": [ "card" ] },
+      { "id": "hpPotions", "name": "ยาเลือด", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "red" },
+      { "id": "shieldPotions", "name": "ยาเกราะ", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "blue" },
+      { "id": "spPotions", "name": "ยา SP", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "orange" }
+    ]
   }
 }

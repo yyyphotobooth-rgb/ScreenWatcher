@@ -61,7 +61,8 @@ public sealed class Watcher : IDisposable
         _frameDetectors = [_death];
         var glyphs = GlyphSet.LoadAll(Path.Combine(AppContext.BaseDirectory, GlyphSet.FileName));
         _hudDetectors = [new AmmoDetector(config, glyphs, Readings), new FuelDetector(config, Readings, Options),
-            new KillDetector(config, glyphs, Readings)];
+            new KillDetector(config, glyphs, Readings),
+            new ItemDetector(config, IconSet.Load(Path.Combine(AppContext.BaseDirectory, IconSet.FileName)), Readings, Options)];
         ResetHud();
     }
 

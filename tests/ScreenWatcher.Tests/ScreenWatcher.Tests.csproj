@@ -26,6 +26,7 @@
     <!-- Tests use the app's real config so tuned thresholds are what gets tested. -->
     <None Include="..\..\src\ScreenWatcher\detectors.json" Link="detectors.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\ScreenWatcher\glyphs.json" Link="glyphs.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\ScreenWatcher\icons.json" Link="icons.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
