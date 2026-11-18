@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>คู่มือสร้างบอท Discord</title>
+<style>
+  :root { --bg:#15181d; --surface:#1e232b; --line:#2c333d; --text:#e8ebf0; --muted:#aab3bf; --accent:#7db8ff; --warn:#ffc98a; --warnbg:#3a2a14; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:"Leelawadee UI","Segoe UI",sans-serif; font-size:16px; line-height:1.7; }
+  main { max-width:720px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:24px; margin:0 0 4px; }
+  h2 { font-size:18px; margin:32px 0 8px; color:var(--accent); }
+  p.lead { color:var(--muted); margin-top:0; }
+  ol { padding-left:0; list-style:none; counter-reset:step; }
+  ol > li { counter-increment:step; background:var(--surface); border-radius:8px; padding:14px 16px 14px 56px; margin:0 0 12px; position:relative; }
+  ol > li::before { content:counter(step); position:absolute; left:16px; top:14px; width:26px; height:26px; border-radius:50%; background:#2b6fd6; color:#fff; font-weight:600; text-align:center; line-height:26px; font-size:14px; }
+  b.ui { background:#2c333d; border-radius:4px; padding:0 6px; font-weight:500; white-space:nowrap; }
+  code { background:#2c333d; border-radius:4px; padding:0 4px; }
+  .note { color:var(--muted); font-size:14px; }
+  .unverified { display:inline-block; background:var(--warnbg); color:var(--warn); border-radius:4px; padding:0 6px; font-size:13px; }
+  .box { background:var(--warnbg); color:#ffe1bd; border-radius:8px; padding:12px 16px; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<h1>คู่มือสร้างบอท Discord ของคุณเอง</h1>
+<p class="lead">ใช้เวลาราว 5 นาที ทำครั้งเดียว ฟรีทั้งหมด บอทนี้เป็นของคุณคนเดียว และทำงานเฉพาะตอนที่เปิดโปรแกรม ScreenWatcher อยู่</p>
+
+<p class="box">ป้ายสีส้ม <span class="unverified">ยังไม่ได้ยืนยัน</span> แปลว่าชื่อปุ่มตรงนั้นยังเทียบกับคู่มือทางการของ Discord ไม่ได้ (หน้านั้นต้องล็อกอินก่อน) ชื่อจริงบนหน้าจออาจต่างไปเล็กน้อย ให้มองหาปุ่มที่ความหมายใกล้เคียงกัน</p>
+
+<h2>ส่วนที่ 1 · สร้างบอท</h2>
+<ol>
+  <li>เปิดเว็บ <a href="https://discord.com/developers/applications">discord.com/developers/applications</a> แล้วล็อกอินด้วยบัญชี Discord ปกติของคุณ</li>
+  <li>กดปุ่ม <b class="ui">New Application</b> (มุมขวาบน) ตั้งชื่อบอท เช่น <code>ยามเฝ้าเกม</code> ติ๊กยอมรับเงื่อนไข แล้วกด <b class="ui">Create</b>
+    <br><span class="unverified">ยังไม่ได้ยืนยัน: ชื่อปุ่ม New Application และช่องติ๊กยอมรับเงื่อนไข</span> (ยืนยันแล้วว่าขั้นสุดท้ายคือกด Create)</li>
+  <li>เมนูด้านซ้าย กด <b class="ui">Bot</b> แอปที่สร้างใหม่จะมีบอทให้อยู่แล้ว ไม่ต้องสร้างเพิ่ม</li>
+  <li>ในหัวข้อ <b class="ui">Token</b> กด <b class="ui">Reset Token</b> แล้วกดยืนยัน ระบบจะแสดงรหัสบอท (ตัวอักษรยาวๆ) <b>เพียงครั้งเดียว</b> ให้กดคัดลอกทันที
+    <br><span class="unverified">ยังไม่ได้ยืนยัน: ปุ่ม Copy และการถามรหัสผ่าน/รหัสยืนยันสองชั้นก่อนแสดงรหัส</span>
+    <br><span class="note">ถ้าเผลอปิดไปก่อนคัดลอก ก็กด Reset Token ใหม่ได้ รหัสเก่าจะใช้ไม่ได้อีก</span></li>
+  <li>ในหน้า Bot เดียวกัน หัวข้อ <b class="ui">Privileged Gateway Intents</b> <b>ไม่ต้องเปิดอะไรเลย</b> ปล่อยปิดไว้ทั้งหมด ScreenWatcher ไม่อ่านข้อความแชทและไม่ดูรายชื่อสมาชิก</li>
+  <li>กลับไปที่โปรแกรม ScreenWatcher → <b class="ui">ตั้งค่า</b> → ขั้นที่ 2 วางรหัสบอท แล้วกด <b class="ui">เชื่อมต่อ</b>
+    <br><span class="note">รหัสบอทเหมือนรหัสผ่าน อย่าส่งให้ใคร อย่าโพสต์ลงแชท โปรแกรมเก็บรหัสแบบเข้ารหัสไว้ในเครื่องนี้ ใช้ได้เฉพาะบัญชี Windows ของคุณ</span></li>
+</ol>
+
+<h2>ส่วนที่ 2 · ห้องสำหรับแจ้งเตือน และเชิญบอทเข้าห้อง</h2>
+<ol>
+  <li>ถ้ายังไม่มีเซิร์ฟเวอร์ส่วนตัว ให้สร้างฟรีในแอป Discord: กดปุ่ม <b class="ui">+</b> ที่แถบซ้ายสุด → <b class="ui">Create My Own</b> → <b class="ui">For me and my friends</b> ตั้งชื่อ แล้วกดสร้าง
+    <br><span class="unverified">ยังไม่ได้ยืนยัน: ชื่อปุ่มสร้างเซิร์ฟเวอร์ทั้งหมดในขั้นนี้</span> (ยืนยันแล้วว่าสร้างเซิร์ฟเวอร์ได้ฟรี)</li>
+  <li>(ไม่บังคับ) สร้างห้องข้อความใหม่สำหรับแจ้งเตือนโดยเฉพาะ เช่น <code>#แจ้งเตือนเกม</code></li>
+  <li>หลังกดเชื่อมต่อในขั้นที่ 2 ถ้าบอทยังไม่อยู่ในเซิร์ฟเวอร์ไหน โปรแกรมจะมีปุ่ม <b class="ui">เชิญบอทเข้าเซิร์ฟเวอร์</b> ในขั้นที่ 3 กดแล้วเว็บ Discord จะเปิดขึ้นมา
+    <br>เลือกเซิร์ฟเวอร์ของคุณ กด <b class="ui">Continue</b> แล้ว <b class="ui">Authorize</b> สิทธิ์ที่ขอมีแค่ 3 อย่าง: ดูห้อง, ส่งข้อความ, แนบไฟล์
+    <br><span class="note">คุณต้องเป็นเจ้าของเซิร์ฟเวอร์ หรือมีสิทธิ์ "Manage Server" ถึงจะเพิ่มบอทได้ (ยืนยันแล้ว)</span>
+    <br><span class="unverified">ยังไม่ได้ยืนยัน: ชื่อปุ่ม Continue / Authorize</span></li>
+  <li>กลับมาที่โปรแกรม ขั้นที่ 3 เลือกห้องจากรายการ แล้วกด <b class="ui">ทดสอบส่ง</b> ข้อความทดสอบควรเข้ามาในห้องนั้น</li>
+  <li>พิมพ์ <code>/ss</code> ในห้องนั้น บอทจะส่งภาพจอเกมตอนนั้นกลับมา (คำสั่งนี้ใช้ได้ทันทีหลังเลือกห้อง ยืนยันแล้วว่าคำสั่งระดับเซิร์ฟเวอร์ใช้ได้ทันที)</li>
+</ol>
+
+<h2>ส่วนที่ 3 · ให้แจ้งเตือนเด้งเข้ามือถือ</h2>
+<ol>
+  <li>ติดตั้งแอป Discord ในมือถือ แล้วล็อกอินบัญชีเดียวกัน และอนุญาตให้แอป Discord แจ้งเตือนได้ในการตั้งค่ามือถือ</li>
+  <li>ในแอปมือถือ เข้าเซิร์ฟเวอร์ของคุณ <b>กดค้าง</b> ที่ห้องแจ้งเตือน → <b class="ui">Notification Settings</b> (การตั้งค่าการแจ้งเตือน) → เลือก <b class="ui">All Messages</b> (ข้อความทั้งหมด)
+    <br><span class="unverified">ยังไม่ได้ยืนยัน: ชื่อเมนูในแอปมือถือทั้งหมดในขั้นนี้</span></li>
+  <li>ตรวจว่าเซิร์ฟเวอร์และห้องนั้น <b>ไม่ได้ถูกปิดเสียง (Mute)</b></li>
+  <li>กด <b class="ui">ทดสอบส่ง</b> ในโปรแกรมอีกครั้ง ข้อความควรเด้งเข้ามือถือ
+    <br><span class="note">ถ้าเปิด Discord ค้างไว้บนคอมและกำลังใช้งานอยู่ Discord อาจไม่ส่งแจ้งเตือนเข้ามือถือ ลองปิด Discord บนคอม หรือทิ้งไว้สักพักแล้วทดสอบใหม่</span>
+    <br><span class="unverified">ยังไม่ได้ยืนยัน: เงื่อนไขเรื่องเด้งเข้ามือถือเฉพาะตอนไม่ได้ใช้คอม</span></li>
+</ol>
+
+<h2>ถ้ามีปัญหา</h2>
+<ul>
+  <li><b>"รหัสบอทไม่ถูกต้อง"</b>: กลับไปหน้า Bot กด Reset Token แล้ววางรหัสใหม่</li>
+  <li><b>ไม่มีห้องให้เลือก</b>: บอทยังไม่มีสิทธิ์ส่งข้อความในห้องไหน กดปุ่มเชิญอีกครั้ง หรือให้สิทธิ์ห้องนั้นแก่บอท</li>
+  <li><b>แจ้งเตือนมาเฉพาะตอนเปิดโปรแกรม</b>: ใช่ บอทอยู่ในโปรแกรมนี้ ปิดโปรแกรมแล้วบอทจะออฟไลน์</li>
+</ul>
+<p class="note">ตรวจขั้นตอนกับเอกสารทางการของ Discord (docs.discord.com/developers) เมื่อ 18 พ.ย. 2026</p>
+</main>
+</body>
+</html>

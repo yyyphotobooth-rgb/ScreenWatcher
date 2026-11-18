@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts)
 {
     public const string FileName = "detectors.json";
 
@@ -23,6 +23,12 @@ public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, Drop
 public sealed record WindowConfig(string TitlePrefix, string[] ExcludeTitles);
 
 public sealed record DropConfig(int MissingChecksToFire, string Message);
+
+/// <summary>Discord alerts: which collect regions make up the death image, and how a failed send is retried.</summary>
+public sealed record AlertsConfig(string[] DeathCropRegions, double[] RetryDelaysSeconds, int QueueLimit)
+{
+    public IReadOnlyList<TimeSpan> RetryDelays => RetryDelaysSeconds.Select(TimeSpan.FromSeconds).ToArray();
+}
 
 /// <summary>Gauge outer-ring locator. Ring geometry is in the 1.0 layout, continuous client
 /// coordinates (pixel i spans [i, i+1)).</summary>

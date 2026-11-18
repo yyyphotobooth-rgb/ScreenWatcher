@@ -16,6 +16,16 @@
     "message": "เกมส์หลุด"
   },
 
+  "alerts": {
+    // Discord alert sent on death: ONE image holding these collect regions (below) side by side,
+    // cut from the frame the death was seen on. Game dropped is text only.
+    "deathCropRegions": [ "gauge", "dialog" ],
+    // A failed send is retried after each of these delays, then logged and dropped.
+    "retryDelaysSeconds": [ 2, 5, 15, 30 ],
+    // Alerts waiting to be sent; more are dropped (and logged).
+    "queueLimit": 8
+  },
+
   "hudScale": {
     // The game scales its whole HUD about the client top-left (1.0 up to 1080 px client height,
     // larger above). The scale is MEASURED, not computed from the resolution: the gauge's outer

@@ -18,6 +18,11 @@
 
   <ItemGroup>
     <None Update="detectors.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="docs\discord-bot-guide.html" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Discord.Net.WebSocket" Version="3.20.2" />
   </ItemGroup>
 
 </Project>

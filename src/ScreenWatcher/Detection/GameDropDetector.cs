@@ -11,6 +11,12 @@ public sealed class GameDropDetector(DropConfig config)
     bool _seen, _fired;
     int _missing;
 
+    /// <summary>The window has been seen at least once.</summary>
+    public bool Seen => _seen;
+
+    /// <summary>The drop event fired and the window has not come back yet.</summary>
+    public bool Fired => _fired;
+
     public WatchEvent? Update(bool windowFound, DateTime now)
     {
         if (windowFound)

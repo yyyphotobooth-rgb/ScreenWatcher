@@ -1,7 +1,8 @@
 # ScreenWatcher
 
-Small Windows tray app (C# WinForms, .NET 10 LTS) that watches the "ACE Online Kaze" game window
-and raises events (death, game dropped).
+Small Windows app (C# WinForms, .NET 10 LTS, dark Thai UI, no tray icon; X exits) that watches the
+"ACE Online Kaze" game window, raises events (death, game dropped) and sends them to the user's own
+Discord bot (Discord.Net, runs inside the app).
 
 ## Rules
 - Reply in English.
@@ -22,6 +23,10 @@ and raises events (death, game dropped).
   analyzer + detector, game-drop detector.
 - `src/ScreenWatcher/Collection`: optional "Collect data" mode (HUD crops + full frames saved to
   %LOCALAPPDATA%\ScreenWatcher\collect, size-capped; writes on a background thread).
+- `src/ScreenWatcher/Alerts`: event -> Thai text + HUD crop PNG, queued and sent with retries.
+- `src/ScreenWatcher/Bot`: Discord bot (Guilds intent only, slash command /ss). Token DPAPI-encrypted
+  (`Config/TokenStore.cs`); never log or commit it (`Logging/AppLog` scrubs it).
+- `src/ScreenWatcher/UI`: main window + settings page, built from `design/mockup-*.html`.
 - `samples/`: reference images and their classification (`samples/README.md`).
 
 ## Commands
