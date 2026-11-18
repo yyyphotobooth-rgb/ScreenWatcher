@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>ตั้งค่า Discord — หน้าเดียว</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#7db8ff}a:hover{color:#a9d0ff}
+</style>
+</helmet>
+<div style="width: 460px; height: 680px; box-sizing: border-box; background: #15181d; color: #e8ebf0; font-family: 'IBM Plex Sans Thai', sans-serif; font-size: 15px; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 18px; background: #1e232b; border-bottom: 1px solid #2c333d">
+<button type="button" style="height: 44px; padding: 0 12px; background: none; border: 0; color: #7db8ff; font: inherit">‹ กลับ</button>
+<span style="font-weight: 600">ตั้งค่า Discord</span>
+</div>
+<div style="padding: 18px; display: flex; flex-direction: column; gap: 14px; flex: 1">
+<div style="background: #1e232b; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; gap: 10px; align-items: baseline"><span style="font-weight: 600; color: #7db8ff">1</span><span style="font-weight: 500">สร้างบอทของคุณ (ทำครั้งเดียว)</span></div>
+<div style="color: #aab3bf; font-size: 13px">ทำตามคู่มือทีละขั้น ใช้เวลาราว 5 นาที แล้วเชิญบอทเข้าห้องส่วนตัวของคุณ</div>
+<button type="button" style="align-self: flex-start; height: 44px; padding: 0 16px; background: #15181d; color: #e8ebf0; border: 1px solid #3a4350; border-radius: 8px; font: inherit">เปิดคู่มือสร้างบอท</button>
+</div>
+<div style="background: #1e232b; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; gap: 10px; align-items: baseline"><span style="font-weight: 600; color: #7db8ff">2</span><label for="s-token" style="font-weight: 500">วางรหัสบอท</label></div>
+<div style="display: flex; gap: 10px">
+<input id="s-token" type="password" value="xxxxxxxxxxxxxxxxxxxxxxxx" style="flex: 1; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 12px; background: #15181d; color: #e8ebf0; border: 1px solid #3a4350; border-radius: 8px; font: inherit">
+<button type="button" style="height: 44px; padding: 0 16px; background: #2b6fd6; color: #ffffff; border: 0; border-radius: 8px; font: inherit; font-weight: 500">เชื่อมต่อ</button>
+</div>
+<div style="color: #7db8ff; font-size: 13px">เชื่อมต่อแล้ว · บอทชื่อ "ยามเฝ้าเกม"</div>
+<div style="color: #aab3bf; font-size: 13px">รหัสนี้เก็บไว้ในเครื่องคุณเท่านั้น อย่าส่งให้คนอื่น</div>
+</div>
+<div style="background: #1e232b; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; gap: 10px; align-items: baseline"><span style="font-weight: 600; color: #7db8ff">3</span><label for="s-room" style="font-weight: 500">เลือกห้องที่จะให้ส่งแจ้งเตือน</label></div>
+<select id="s-room" style="height: 44px; padding: 0 12px; background: #15181d; color: #e8ebf0; border: 1px solid #3a4350; border-radius: 8px; font: inherit"><option>ห้องของ Palo › #แจ้งเตือนเกม</option></select>
+<div style="display: flex; gap: 10px; align-items: center">
+<button type="button" style="height: 44px; padding: 0 16px; background: #15181d; color: #e8ebf0; border: 1px solid #3a4350; border-radius: 8px; font: inherit">ทดสอบส่ง</button>
+<span style="color: #aab3bf; font-size: 13px">ส่งข้อความลองเข้ามือถือ</span>
+</div>
+</div>
+<div style="color: #aab3bf; font-size: 13px">พิมพ์ /ss ในห้องนั้น โปรแกรมจะส่งภาพจอเกมตอนนั้นกลับมา</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":460,"height":680}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

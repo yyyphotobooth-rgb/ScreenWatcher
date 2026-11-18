@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>แบบ A — รายการเดียว</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#7db8ff}a:hover{color:#a9d0ff}
+</style>
+</helmet>
+<div style="width: 460px; height: 800px; box-sizing: border-box; background: #15181d; color: #e8ebf0; font-family: 'IBM Plex Sans Thai', sans-serif; font-size: 15px; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: #1e232b; border-bottom: 1px solid #2c333d">
+<span style="font-weight: 600; font-size: 15px">ScreenWatcher</span>
+<span style="color: #aab3bf; font-size: 13px">เฝ้าอยู่</span>
+</div>
+<div style="padding: 18px; display: flex; flex-direction: column; gap: 14px; flex: 1">
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+<div style="background: #1e232b; border-radius: 8px; padding: 12px 14px">
+<div style="color: #aab3bf; font-size: 13px">เกม</div>
+<div style="font-weight: 500; color: #7db8ff; margin-top: 2px">พบแล้ว · 1024×768</div>
+</div>
+<div style="background: #1e232b; border-radius: 8px; padding: 12px 14px">
+<div style="color: #aab3bf; font-size: 13px">Discord</div>
+<div style="font-weight: 500; color: #7db8ff; margin-top: 2px">เชื่อมต่อแล้ว</div>
+</div>
+</div>
+<div style="background: #1e232b; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 12px; padding: 0 14px; height: 34px; border-bottom: 1px solid #2c333d; color: #aab3bf; font-size: 13px"><span style="flex: 1; padding-left: 30px">แจ้งเตือนเมื่อ</span><span style="width: 92px; text-align: center">เตือนที่</span><span style="width: 72px; text-align: right">ตอนนี้</span></div>
+<label style="display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 48px; border-bottom: 1px solid #2c333d"><input type="checkbox" checked style="width: 18px; height: 18px"><span style="flex: 1">ตาย</span><span style="width: 72px; text-align: right; font-size: 17px; font-weight: 500">ปกติ</span></label>
+<label style="display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 48px; border-bottom: 1px solid #2c333d"><input type="checkbox" checked style="width: 18px; height: 18px"><span style="flex: 1">เกมส์หลุด</span><span style="width: 72px; text-align: right; font-size: 17px; font-weight: 500">ปกติ</span></label>
+<label style="display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 48px; border-bottom: 1px solid #2c333d"><input type="checkbox" checked style="width: 18px; height: 18px"><span style="flex: 1">กระสุนปืนกลหมด</span><span style="width: 72px; text-align: right; font-size: 17px; font-weight: 500">08120</span></label>
+<label style="display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 48px; border-bottom: 1px solid #2c333d"><input type="checkbox" checked style="width: 18px; height: 18px"><span style="flex: 1">มิสไซล์หมด</span><span style="width: 72px; text-align: right; font-size: 17px; font-weight: 500">00770</span></label>
+<div style="display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 48px; border-bottom: 1px solid #2c333d"><input id="a-fuel" type="checkbox" checked style="width: 18px; height: 18px"><label for="a-fuel" style="flex: 1">น้ำมันต่ำกว่า</label><span style="width: 92px; display: flex; align-items: center; gap: 6px"><input aria-label="เปอร์เซ็นต์น้ำมันที่ให้เตือน" type="number" value="10" style="width: 56px; height: 32px; box-sizing: border-box; background: #15181d; color: #e8ebf0; border: 1px solid #3a4350; border-radius: 6px; text-align: center; font: inherit"><span style="color: #aab3bf; font-size: 13px">%</span></span><span style="width: 72px; text-align: right; font-size: 17px; font-weight: 500">97%</span></div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 56px; border-bottom: 1px solid #2c333d; background: #3a2a14"><input id="a-card" type="checkbox" checked style="width: 18px; height: 18px"><label for="a-card" style="flex: 1; display: flex; flex-direction: column"><span>บัตรกันมอนเหลือ</span><span style="color: #ffc98a; font-size: 13px">ถึงเกณฑ์เตือนแล้ว</span></label><span style="width: 92px; display: flex; align-items: center; gap: 6px"><input aria-label="จำนวนบัตรกันมอนที่ให้เตือน" type="number" value="3" style="width: 56px; height: 32px; box-sizing: border-box; background: #15181d; color: #e8ebf0; border: 1px solid #b9772a; border-radius: 6px; text-align: center; font: inherit"><span style="color: #ffc98a; font-size: 13px">ใบ</span></span><span style="width: 72px; text-align: right; font-size: 17px; font-weight: 600; color: #ffe1bd">3</span></div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 48px; border-bottom: 1px solid #2c333d"><input id="a-oil" type="checkbox" checked style="width: 18px; height: 18px"><label for="a-oil" style="flex: 1">ขวดน้ำมันเหลือ</label><span style="width: 92px; display: flex; align-items: center; gap: 6px"><input aria-label="จำนวนขวดน้ำมันที่ให้เตือน" type="number" value="2" style="width: 56px; height: 32px; box-sizing: border-box; background: #15181d; color: #e8ebf0; border: 1px solid #3a4350; border-radius: 6px; text-align: center; font: inherit"><span style="color: #aab3bf; font-size: 13px">ขวด</span></span><span style="width: 72px; text-align: right; font-size: 17px; font-weight: 500">5</span></div>
+<label style="display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 48px"><input type="checkbox" checked style="width: 18px; height: 18px"><span style="flex: 1">ยิงมอนครบ 300 ตัว</span><span style="width: 72px; text-align: right; font-size: 17px; font-weight: 500">278</span></label>
+</div>
+<div style="display: flex; gap: 10px">
+<button type="button" style="flex: 1; height: 44px; background: #2b6fd6; color: #ffffff; border: 0; border-radius: 8px; font: inherit; font-weight: 500">หยุดเฝ้าชั่วคราว</button>
+<button type="button" style="height: 44px; padding: 0 16px; background: #1e232b; color: #e8ebf0; border: 1px solid #3a4350; border-radius: 8px; font: inherit">ทดสอบส่ง</button>
+<button type="button" style="height: 44px; padding: 0 16px; background: #1e232b; color: #e8ebf0; border: 1px solid #3a4350; border-radius: 8px; font: inherit">ตั้งค่า</button>
+</div>
+<div style="color: #aab3bf; font-size: 13px">แจ้งเตือนล่าสุด: บัตรกันมอนเหลือ 3 ใบ · 16:48</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":460,"height":800}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
