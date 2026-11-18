@@ -1,0 +1,58 @@
+// ScreenWatcher detector settings. All pixel coordinates are in physical pixels,
+// relative to the game window's CLIENT area top-left (title bar and borders excluded).
+// Measured from samples/ (1024x768 dead samples and 1600x1024 live captures); see samples/README.md.
+{
+  "pollIntervalMs": 1000,
+
+  "window": {
+    "titlePrefix": "ACE Online",
+    // The small disconnect error dialog is titled "ACEonline"; never treat it as the game.
+    "excludeTitles": [ "ACEonline" ]
+  },
+
+  "drop": {
+    // The game window was seen earlier and is now missing for this many consecutive checks.
+    "missingChecksToFire": 2,
+    "message": "เกมส์หลุด"
+  },
+
+  "death": {
+    "message": "ตายแล้ว",
+    // Gauge dark AND dialog present continuously for at least this long.
+    "holdSeconds": 1.5,
+
+    "gauge": {
+      // Fixed position at every window size. Gauge centre (82,104); outer ring diameter ~147 px
+      // (ignored). HP band (left, red) and right band (blue) form an annulus r = 40..64.
+      // Patches are centred on r = 52 at 30/60/120/150 degrees from vertical, avoiding the
+      // number text at 90 degrees and the centre fuel disc.
+      "patchSize": 6,
+      "leftPatches": [ [ 56, 59 ], [ 37, 78 ], [ 37, 130 ], [ 56, 149 ] ],
+      "rightPatches": [ [ 108, 59 ], [ 127, 78 ], [ 127, 130 ], [ 108, 149 ] ],
+      // "Red" (HP filled): mean R >= redMinR and G,B each <= R * redMaxOtherRatio.  Alive ~ (150,2,2).
+      "redMinR": 110,
+      "redMaxOtherRatio": 0.3,
+      // "Dark" (empty): max channel <= darkMaxChannel.  Dead ~ left (56,9,4), right (72,28,12);
+      // alive right half is blue ~ (13,143,211), so it is never "dark".
+      "darkMaxChannel": 110,
+      // HP counts as "back" (re-arm) when at least this many left patches are red.
+      "minHpFilledPatches": 1
+    },
+
+    "dialog": {
+      // Dark navy "return to town?" box, 376x95 px, spans x -189..+186 and y -44..+50 from the
+      // client centre (W/2, H/2). Patches sit in the plain body, away from text and buttons.
+      "patchWidth": 16,
+      "patchHeight": 6,
+      "patchOffsetsFromCenter": [ [ -169, -31 ], [ 156, -31 ], [ -169, 14 ], [ 156, 14 ], [ -104, 29 ], [ 96, 29 ] ],
+      // Body is opaque, measured (3..4, 19..37, 34..70) in both dead samples. The game's own
+      // "INFORMATION" window uses a similar navy but measured (11..18, 40..60, 66..97), so R is
+      // the key separator (sample live3_printwindow.png).
+      "navyMaxR": 8,
+      "navyMinB": 25,
+      "navyMaxB": 90,
+      "navyMinBMinusR": 20,
+      "minMatchingPatches": 6
+    }
+  }
+}
