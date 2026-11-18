@@ -2,6 +2,8 @@ using System.Buffers;
 using System.Drawing;
 using ScreenWatcher.Config;
 using ScreenWatcher.Detection;
+using ScreenWatcher.Detection.Hud;
+using ScreenWatcher.Diagnostics;
 using ScreenWatcher.Imaging;
 
 namespace ScreenWatcher.Collection;
@@ -13,6 +15,11 @@ namespace ScreenWatcher.Collection;
 /// save is due (<see cref="SaveSchedule"/>), the crop is copied into a pooled buffer and handed to
 /// the <see cref="CollectStore"/> writer thread; nothing is encoded or written on the poll.
 /// Exists only while collection is on.
+///
+/// Mode "อัตโนมัติ" (<see cref="AutoCollectRules"/> given): a region is only looked at while a
+/// rule is active for it (same change test, schedule and cap); when it becomes active, the ring's
+/// crops of that region from PreSeconds before are saved first ("pre"), and no periodic full frames
+/// are saved. The rule name goes into index.csv.
 /// </summary>
 public sealed class DataCollector : IDisposable
 {
@@ -28,12 +35,19 @@ public sealed class DataCollector : IDisposable
     readonly CollectStore _store;
     readonly RegionState[] _regions;
     readonly SaveSchedule _fullFrame;
+    readonly AutoCollectRules? _auto;
+    readonly HudRing? _ring;
+    readonly TimeSpan _pre;
+    readonly int[] _autoIndex;
     volatile bool _disposed;
     long _pollTicks;
     int _polls;
 
-    public DataCollector(CollectConfig config, CollectStore store)
+    public DataCollector(CollectConfig config, CollectStore store, AutoCollectRules? auto = null, HudRing? ring = null, double preSeconds = 0)
     {
+        _auto = auto;
+        _ring = ring;
+        _pre = TimeSpan.FromSeconds(preSeconds);
         _config = config;
         _store = store;
         var gap = TimeSpan.FromSeconds(config.MinSecondsBetweenSaves);
@@ -41,7 +55,13 @@ public sealed class DataCollector : IDisposable
         _regions = config.Regions.Select(r => new RegionState(new CollectRegion(r), new SaveSchedule(gap, beat))).ToArray();
         var period = TimeSpan.FromMinutes(config.FullFrameMinutes);
         _fullFrame = new SaveSchedule(period, period);
+        _autoIndex = _regions.Select(r => auto?.IndexOf(r.Region.Name) ?? -1).ToArray();
     }
+
+    public bool IsAuto => _auto is not null;
+
+    /// <summary>Auto mode: a region started (rule) or stopped (null) being collected. Polling thread.</summary>
+    public event Action<string, string?>? AutoChanged;
 
     public CollectStore Store => _store;
 
@@ -61,24 +81,44 @@ public sealed class DataCollector : IDisposable
     public double MeanPollMilliseconds => _polls == 0 ? 0 : TimeSpan.FromTicks(_pollTicks).TotalMilliseconds / _polls;
 
     /// <summary>Called on the polling thread with every good frame.</summary>
-    public void OnFrame(Frame frame, HudScale scale, DateTime now)
+    public void OnFrame(Frame frame, HudScale scale, DateTime now) =>
+        OnFrame(frame, scale, now, new AutoInputs(now, scale, false, _ => RowReading.None, _ => 0));
+
+    /// <summary>Called on the polling thread with every good frame (after the HUD readers ran).</summary>
+    public void OnFrame(Frame frame, HudScale scale, DateTime now, in AutoInputs inputs)
     {
         if (_disposed) return;
         long t0 = DateTime.UtcNow.Ticks;
-        foreach (var s in _regions)
+        _auto?.Evaluate(inputs);
+        for (int i = 0; i < _regions.Length; i++)
         {
+            var s = _regions[i];
+            string? rule = null;
+            if (_auto is not null)
+            {
+                int a = _autoIndex[i];
+                if (a < 0) continue;
+                if (_auto.Stopped(a)) AutoChanged?.Invoke(s.Region.Name, null);
+                if (!_auto.IsActive(a)) continue;
+                rule = _auto.RuleOf(a);
+                if (_auto.Started(a))
+                {
+                    AutoChanged?.Invoke(s.Region.Name, rule);
+                    SavePre(s.Region.Name, now, rule);
+                }
+            }
             var rect = s.Region.Locate(frame.Width, frame.Height, scale);
             if (rect.IsEmpty) continue;
             s.Current.Compute(frame, rect, s.Region.Keys);
             bool changed = HudSignature.Changed(s.Current, s.Saved, _config.Change, scale, s.Region.MinChangedPixels);
-            if (s.Schedule.Decide(changed, now) is { } reason && Queue(frame, rect, now, s.Region.Name, reason, "", scale))
+            if (s.Schedule.Decide(changed, now) is { } reason && Queue(frame, rect, now, s.Region.Name, reason, "", scale, rule))
             {
                 s.Schedule.MarkSaved(now);
                 s.Saves++;
                 (s.Saved, s.Current) = (s.Current, s.Saved);
             }
         }
-        if (_fullFrame.Decide(changed: false, now) is not null)
+        if (_auto is null && _fullFrame.Decide(changed: false, now) is not null)
         {
             if (QueueFull(frame, now, SaveReason.Periodic, "", scale)) _fullFrame.MarkSaved(now);
         }
@@ -93,7 +133,9 @@ public sealed class DataCollector : IDisposable
     /// </summary>
     public void OnEvent(WatchEvent e, Frame? frame, HudScale scale, bool frameIsLastSeen)
     {
-        if (_disposed || frame is null || frame.Width == 0 || e.Kind == WatchEventKind.Hud) return;
+        if (_disposed) return;
+        _auto?.NoteAlert(e);
+        if (frame is null || frame.Width == 0 || e.Kind == WatchEventKind.Hud) return;
         string suffix = "_" + (e.Kind == WatchEventKind.Death ? "death" : "dropped") + (frameIsLastSeen ? "_lastseen" : "");
         QueueFull(frame, e.Time, SaveReason.Event, suffix, scale);
     }
@@ -105,11 +147,30 @@ public sealed class DataCollector : IDisposable
         return ok;
     }
 
-    bool Queue(Frame frame, Rectangle rect, DateTime now, string region, SaveReason reason, string suffix, HudScale scale)
+    bool Queue(Frame frame, Rectangle rect, DateTime now, string region, SaveReason reason, string suffix, HudScale scale, string? rule = null)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(rect.Width * rect.Height * 4);
         frame.CopyRect(rect, buffer);
-        return _store.TryEnqueue(new SaveJob(buffer, rect.Width, rect.Height, now, region, reason, suffix, frame.Width, frame.Height, scale));
+        return _store.TryEnqueue(new SaveJob(buffer, rect.Width, rect.Height, now, region, reason, suffix, frame.Width, frame.Height, scale, rule ?? EventRule));
+    }
+
+    /// <summary>Full frames on death / game dropped: in auto mode they count as rule "alert".</summary>
+    string? EventRule => _auto is null ? null : AutoCollectRules.Alert;
+
+    /// <summary>The ring's crops of one region from PreSeconds before <paramref name="now"/>,
+    /// at most one per MinSecondsBetweenSaves (the existing rate limit).</summary>
+    void SavePre(string region, DateTime now, string? rule)
+    {
+        if (_ring is null || _pre <= TimeSpan.Zero) return;
+        var crops = _ring.Snapshot(now - _pre, now, region);
+        var gap = TimeSpan.FromSeconds(_config.MinSecondsBetweenSaves);
+        DateTime? last = null;
+        foreach (var c in crops)
+        {
+            if (last is { } l && c.Time - l < gap) { ArrayPool<byte>.Shared.Return(c.Pixels); continue; }
+            if (_store.TryEnqueue(new SaveJob(c.Pixels, c.Width, c.Height, c.Time, c.Region, SaveReason.Pre, "", c.ClientWidth, c.ClientHeight, c.Scale, rule)))
+                last = c.Time;
+        }
     }
 
     public void Dispose()

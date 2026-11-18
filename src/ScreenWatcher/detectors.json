@@ -318,5 +318,35 @@
       { "id": "shieldPotions", "name": "ยาเกราะ", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "blue" },
       { "id": "spPotions", "name": "ยา SP", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "orange" }
     ]
+  },
+
+  "diagnostics": {
+    // Field-trial diagnostics (Diagnostics/). Everything stays in %LOCALAPPDATA%\ScreenWatcher.
+    // journal\yyyy-MM-dd.jsonl: one JSON record per line, always on; oldest day files go first.
+    "journalMaxMegabytes": 20,
+    // evidence\yyyy-MM-dd: alert evidence (setting "เก็บภาพทุกครั้งที่เตือน") and /miss bundles.
+    "evidenceMaxMegabytes": 200,
+    "evidenceJpegQuality": 90,
+    // HUD region crops kept in memory (one per poll per collect region) for /miss and auto collection.
+    "ringSeconds": 10,
+    // Longest note kept from /miss.
+    "missNoteMaxChars": 500,
+    // Collection mode "อัตโนมัติ": collect a region only while one of these rules is true for it,
+    // plus the ring from preSeconds before it starts and postSeconds after it ends.
+    "auto": {
+      "preSeconds": 10,
+      "postSeconds": 10,
+      "fuelBelowPercent": 30,        // a. fuel reading below this
+      "scaleAtLeast": 1.2,           // b. HUD scale (x or y) at or above this: all regions
+      "killAtLeast": 290,            // c. kill counter at or above this
+      "itemMargin": 2,               // d. item/potion count <= its threshold + this
+      "ammoBelow": 50,               // e. gun or missile counter below this
+                                     // f. every alert: preSeconds before to postSeconds after
+      "unknownSeconds": 5,           // g. a row shows "?" longer than this while the HUD is present
+      "itemJump": 50,                // h. a stable item count rises by more than this,
+      "ammoJump": 1000,              //    a stable ammo count rises by more than this,
+                                     //    or the stable kill counter goes down
+      "jumpStablePolls": 2           //    "stable" = the same reading on this many polls in a row
+    }
   }
 }

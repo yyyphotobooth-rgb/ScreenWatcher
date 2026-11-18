@@ -28,6 +28,11 @@ Discord bot (Discord.Net, runs inside the app).
   unverified: `samples/README.md`.
 - `src/ScreenWatcher/Collection`: optional "Collect data" mode (HUD crops + full frames saved to
   %LOCALAPPDATA%\ScreenWatcher\collect, size-capped; writes on a background thread).
+- `src/ScreenWatcher/Diagnostics`: field-trial diagnostics, all under %LOCALAPPDATA%\ScreenWatcher:
+  event journal (`journal\yyyy-MM-dd.jsonl`, 20 MB cap), alert evidence and /miss bundles
+  (`evidence\`, 200 MB cap), hourly row statistics, in-memory HUD ring (~10 s). Collection modes
+  ปิด / อัตโนมัติ / เปิดตลอด; the auto rules are `Collection/AutoCollectRules.cs`, numbers in
+  detectors.json `diagnostics`.
 - `src/ScreenWatcher/Alerts`: event -> Thai text + PNG (death: full client frame; HUD rows: crop of
   that HUD part), queued and sent with retries.
 - `src/ScreenWatcher/Bot`: Discord bot (Guilds intent only, slash command /ss). Token DPAPI-encrypted

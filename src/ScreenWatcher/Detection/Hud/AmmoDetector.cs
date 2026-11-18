@@ -8,7 +8,7 @@ namespace ScreenWatcher.Detection.Hud;
 /// Machine-gun and missile counters. A counter is empty when it reads 00000 by digit shape on
 /// StablePolls consecutive polls; the alert fires once and re-arms when the counter reads above 0.
 /// </summary>
-public sealed class AmmoDetector : IHudDetector
+public sealed class AmmoDetector : IHudDetector, IArmedState
 {
     sealed class Counter(string id, AmmoCounterConfig config, GlyphSet glyphs, int stablePolls)
     {
@@ -65,6 +65,11 @@ public sealed class AmmoDetector : IHudDetector
         if (c.Stable.Latest is { } v) _readings.Set(c.Id, v.ToString(), c.Stable.Value == 0);
         else _readings.Set(c.Id, RowReading.Unknown);
         return fire;
+    }
+
+    public void CopyArmed(IDictionary<string, bool> into)
+    {
+        foreach (var c in _counters) into[c.Id] = c.Armed;
     }
 
     public void Reset()

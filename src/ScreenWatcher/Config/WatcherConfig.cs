@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics)
 {
     public const string FileName = "detectors.json";
 
@@ -160,3 +160,15 @@ public sealed record ItemsConfig(
 /// pictures (icons.json) that show it, for potions the mark colour (red / blue / orange), and
 /// optionally its own icon distance limit (else ItemsConfig.IconMaxDistance).</summary>
 public sealed record ItemDef(string Id, string Name, string Unit, int DefaultThreshold, string[] Icons, string? Mark = null, double? MaxDistance = null);
+
+/// <summary>Field-trial diagnostics (Diagnostics/): event journal, alert evidence, /miss, the
+/// in-memory ring of HUD crops and the "อัตโนมัติ" collection rules.</summary>
+public sealed record DiagnosticsConfig(
+    double JournalMaxMegabytes, double EvidenceMaxMegabytes, int EvidenceJpegQuality, int RingSeconds, int MissNoteMaxChars,
+    AutoCollectConfig Auto);
+
+/// <summary>Collection mode "อัตโนมัติ" rules (see Collection/AutoCollectRules.cs).</summary>
+public sealed record AutoCollectConfig(
+    double PreSeconds, double PostSeconds,
+    double FuelBelowPercent, double ScaleAtLeast, int KillAtLeast, int ItemMargin, int AmmoBelow,
+    double UnknownSeconds, int ItemJump, int AmmoJump, int JumpStablePolls);

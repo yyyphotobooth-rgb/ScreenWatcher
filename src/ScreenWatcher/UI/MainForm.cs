@@ -7,6 +7,7 @@ using ScreenWatcher.Bot;
 using ScreenWatcher.Collection;
 using ScreenWatcher.Config;
 using ScreenWatcher.Detection;
+using ScreenWatcher.Diagnostics;
 using ScreenWatcher.Imaging;
 using ScreenWatcher.Logging;
 
@@ -27,6 +28,7 @@ public sealed class MainForm : Form
     readonly Watcher _watcher;
     readonly DiscordBot _bot;
     readonly AlertService _alerts;
+    readonly DiagnosticsHub _diag;
     readonly System.Windows.Forms.Timer _uiTimer = new() { Interval = 1000 };
     readonly ToolTip _tip = new() { AutoPopDelay = 15000 };
     long _measuredBytes = -1;
@@ -59,10 +61,22 @@ public sealed class MainForm : Form
     readonly Label _channelNote = MakeLabel("", Theme.Small, Theme.Muted, Theme.Surface);
     readonly DarkButton _testSettings = new() { Text = "ทดสอบส่ง", SecondaryFill = Theme.Background };
     readonly Label _testNote = MakeLabel("ส่งข้อความลองเข้ามือถือ", Theme.Small, Theme.Muted, Theme.Surface);
-    readonly DarkCheck _collect = new() { BackColor = Theme.Surface };
-    readonly Label _collectLabel = MakeLabel("เก็บข้อมูลภาพ HUD (Collect data)", Theme.Body, Theme.Text, Theme.Surface);
+    readonly DarkButton[] _modeButtons =
+    [
+        new() { Text = CollectModes.Thai(CollectMode.Off), SecondaryFill = Theme.Background },
+        new() { Text = CollectModes.Thai(CollectMode.Auto), SecondaryFill = Theme.Background },
+        new() { Text = CollectModes.Thai(CollectMode.Always), SecondaryFill = Theme.Background },
+    ];
+    readonly Label _modeHint = MakeLabel("", Theme.Small, Theme.Muted, Theme.Surface, ContentAlignment.TopLeft);
+    readonly DarkCheck _evidence = new() { BackColor = Theme.Surface };
+    readonly Label _evidenceLabel = MakeLabel("เก็บภาพทุกครั้งที่เตือน", Theme.Body, Theme.Text, Theme.Surface);
     readonly Label _collectSize = MakeLabel("-", Theme.Small, Theme.Muted, Theme.Surface);
+    readonly Label _evidenceSize = MakeLabel("-", Theme.Small, Theme.Muted, Theme.Surface);
+    readonly Label _journalSize = MakeLabel("-", Theme.Small, Theme.Muted, Theme.Surface);
     readonly DarkButton _openFolder = new() { Text = "เปิดโฟลเดอร์", SecondaryFill = Theme.Background };
+    readonly DarkButton _openEvidence = new() { Text = "เปิดโฟลเดอร์", SecondaryFill = Theme.Background };
+    readonly DarkButton _openJournal = new() { Text = "เปิดโฟลเดอร์", SecondaryFill = Theme.Background };
+    CollectMode _collectMode;
     bool _suppressChannelEvent;
 
     public MainForm(WatcherConfig config, bool noSend = false)
@@ -84,7 +98,18 @@ public sealed class MainForm : Form
         ClientSize = new Size(S(460), S(800));
 
         _watcher = new Watcher(config);
-        _bot = new DiscordBot(_log, new SsCommandHandler(_watcher.Snapshot, () => _bot!.ChosenChannelId))
+        var d = config.Diagnostics;
+        _diag = new DiagnosticsHub(config,
+            new Journal(AppSettings.JournalRoot, (long)(d.JournalMaxMegabytes * 1024 * 1024), _log.Scrub),
+            new EvidenceStore(AppSettings.EvidenceRoot, (long)(d.EvidenceMaxMegabytes * 1024 * 1024), d.EvidenceJpegQuality),
+            RowText, RowThreshold, _watcher.CaptureForMiss, AlertRowCatalog.All.Select(r => r.Id).ToArray())
+        {
+            SaveEvidence = _settings.SaveAlertEvidence,
+        };
+        _diag.Evidence.Start();
+        _bot = new DiscordBot(_log,
+            new SsCommandHandler(_watcher.Snapshot, () => _bot!.ChosenChannelId, o => _diag.OnCommand(SsCommandHandler.CommandName, o)),
+            new MissCommandHandler(_diag.RecordMiss, () => _bot!.ChosenChannelId, o => _diag.OnCommand(MissCommandHandler.CommandName, o)))
         {
             ChosenGuildId = _settings.DiscordGuildId,
             ChosenChannelId = _settings.DiscordChannelId,
@@ -97,12 +122,18 @@ public sealed class MainForm : Form
         Controls.Add(_settingsPage);
         Controls.Add(_mainPage);
 
-        _watcher.StatusChanged += _ => OnUi(UpdateGameTile);
+        _watcher.StatusChanged += s => { _diag.OnStatus(s); OnUi(UpdateGameTile); };
         _watcher.EventRaised += OnWatchEvent;
-        _bot.StatusChanged += _ => OnUi(() => { UpdateDiscordTile(); UpdateBotStatus(); RefreshChannels(); });
+        _watcher.Polled += _diag.OnPolled;
+        _watcher.Rearmed += _diag.OnRearmed;
+        _bot.StatusChanged += s => { _diag.OnDiscordStatus(s.State.ToString(), s.Reason); OnUi(() => { UpdateDiscordTile(); UpdateBotStatus(); RefreshChannels(); }); };
+        _bot.Problem += _diag.OnDiscordProblem;
         _bot.ChannelsChanged += () => OnUi(RefreshChannels);
-        _alerts.Completed += (m, ok) => OnUi(() =>
-            _lastAlert.Text = $"แจ้งเตือนล่าสุด: {m.Text} · {m.Time.ToString("HH:mm", Inv)}" + (ok ? "" : " (ส่งไม่สำเร็จ)"));
+        _alerts.Completed += (m, ok) =>
+        {
+            if (!_noSend) _diag.OnAlertCompleted(m, ok);
+            OnUi(() => _lastAlert.Text = $"แจ้งเตือนล่าสุด: {m.Text} · {m.Time.ToString("HH:mm", Inv)}" + (ok ? "" : " (ส่งไม่สำเร็จ)"));
+        };
         _uiTimer.Tick += (_, _) => OnUiTick();
     }
 
@@ -177,6 +208,7 @@ public sealed class MainForm : Form
                     _settings.SetAlertEnabled(r.Spec.Id, on);
                     SaveSettings();
                     _log.Write($"Alert {r.Spec.Id}: {(on ? "on" : "off")}");
+                    _diag.OnSetting($"alert.{r.Spec.Id}.enabled", on);
                 };
                 if (spec.Unit is not null)
                 {
@@ -188,6 +220,7 @@ public sealed class MainForm : Form
                         _watcher.Options.SetThreshold(r.Spec.Id, v);
                         SaveSettings();
                         _log.Write($"Alert {r.Spec.Id}: threshold {v}");
+                        _diag.OnSetting($"alert.{r.Spec.Id}.threshold", v);
                     };
                 }
                 if (spec.SideChooser)
@@ -200,6 +233,7 @@ public sealed class MainForm : Form
                         _watcher.Options.SetWatchRight(r.Spec.Id, right);
                         SaveSettings();
                         _log.Write($"Alert {r.Spec.Id}: watch {(right ? "right" : "left")}");
+                        _diag.OnSetting($"alert.{r.Spec.Id}.side", right ? "right" : "left");
                     };
                 }
             }
@@ -230,6 +264,7 @@ public sealed class MainForm : Form
         {
             _watcher.Paused = !_watcher.Paused;
             _log.Write(_watcher.Paused ? "Paused" : "Resumed");
+            _diag.OnSetting("paused", _watcher.Paused);
             UpdateWatchState();
         };
         _testMain.Click += async (_, _) => await TestSendAsync();
@@ -321,19 +356,33 @@ public sealed class MainForm : Form
         ssHint.SetBounds(pad, y, cardW, S(20));
         y += S(20) + S(14);
 
-        // Collect data (moved here from the old main window; behaviour unchanged)
+        // เก็บข้อมูลเพื่อพัฒนา: collection mode, alert evidence, folder sizes (all files stay on this PC)
         var collect = new Card();
-        var ctitle = MakeLabel("เก็บข้อมูล", Theme.Body, Theme.Text, Theme.Surface);
+        var ctitle = MakeLabel("เก็บข้อมูลเพื่อพัฒนา", Theme.Body, Theme.Text, Theme.Surface);
         ctitle.SetBounds(S(14), S(14), inner, S(22));
         int cy = S(14) + S(22) + S(10);
-        _collect.SetBounds(S(14), cy + S(13), S(18), S(18));
-        _collectLabel.SetBounds(S(14) + S(18) + S(12), cy, inner - S(30), S(44));
-        cy += S(44) + S(6);
+        var modeLabel = MakeLabel("เก็บภาพ HUD", Theme.Small, Theme.Muted, Theme.Surface);
+        modeLabel.SetBounds(S(14), cy, inner, S(20));
+        cy += S(20) + S(6);
+        int mw = (inner - S(8) * 2) / 3;
+        for (int k = 0; k < _modeButtons.Length; k++) _modeButtons[k].SetBounds(S(14) + k * (mw + S(8)), cy, mw, S(40));
+        cy += S(40) + S(6);
+        _modeHint.AutoEllipsis = false;
+        _modeHint.SetBounds(S(14), cy, inner, S(40));
+        cy += S(40) + S(6);
+        _evidence.SetBounds(S(14), cy + S(13), S(18), S(18));
+        _evidenceLabel.SetBounds(S(14) + S(18) + S(12), cy, inner - S(30), S(44));
+        cy += S(44) + S(8);
         int ofW = ButtonWidth(_openFolder);
-        _collectSize.SetBounds(S(14), cy, inner - ofW - S(10), S(44));
-        _openFolder.SetBounds(cardW - S(14) - ofW, cy, ofW, S(44));
-        cy += S(44) + S(14);
-        collect.Controls.AddRange([ctitle, _collect, _collectLabel, _collectSize, _openFolder]);
+        foreach (var (label, button) in new[] { (_collectSize, _openFolder), (_evidenceSize, _openEvidence), (_journalSize, _openJournal) })
+        {
+            label.SetBounds(S(14), cy, inner - ofW - S(10), S(40));
+            button.SetBounds(cardW - S(14) - ofW, cy, ofW, S(40));
+            cy += S(40) + S(6);
+        }
+        cy += S(8);
+        collect.Controls.AddRange([ctitle, modeLabel, .. _modeButtons, _modeHint, _evidence, _evidenceLabel,
+            _collectSize, _openFolder, _evidenceSize, _openEvidence, _journalSize, _openJournal]);
         collect.SetBounds(pad, y, cardW, cy);
         y += cy + pad;
 
@@ -342,14 +391,23 @@ public sealed class MainForm : Form
         _settingsPage.Controls.Add(content);
         _settingsPage.Controls.Add(header);
 
-        string tip = "บันทึกภาพ PNG เล็กๆ ของส่วน HUD (และภาพเต็มจอเกมบางภาพ) ไว้ที่\n"
-            + AppSettings.CollectRoot + "\n"
-            + "ภาพที่เก็บอยู่ในเครื่องนี้เท่านั้น โหมดนี้ไม่อัปโหลดอะไร\n"
-            + "ภาพเต็มจออาจมีแชทในเกมติดมาด้วย";
-        _tip.SetToolTip(_collectLabel, tip);
-        _tip.SetToolTip(_collectSize, tip);
+        const string tip = "ไฟล์ทั้งหมดอยู่ในเครื่องนี้เท่านั้น ไม่มีการอัปโหลด\nภาพเต็มจออาจมีแชทในเกมติดมาด้วย";
+        _tip.SetToolTip(ctitle, tip);
+        _tip.SetToolTip(modeLabel, tip);
+        foreach (var b in _modeButtons) _tip.SetToolTip(b, tip);
+        _tip.SetToolTip(_evidenceLabel, tip);
+        _tip.SetToolTip(_collectSize, tip + "\n" + AppSettings.CollectRoot);
+        _tip.SetToolTip(_evidenceSize, tip + "\n" + AppSettings.EvidenceRoot);
+        _tip.SetToolTip(_journalSize, "บันทึกเหตุการณ์ (ไม่มีภาพ) อยู่ในเครื่องนี้เท่านั้น\n" + AppSettings.JournalRoot);
         _tip.SetToolTip(_openFolder, AppSettings.CollectRoot);
-        _collectLabel.Click += (_, _) => _collect.Checked = !_collect.Checked;
+        _tip.SetToolTip(_openEvidence, AppSettings.EvidenceRoot);
+        _tip.SetToolTip(_openJournal, AppSettings.JournalRoot);
+        _evidenceLabel.Click += (_, _) => _evidence.Checked = !_evidence.Checked;
+        for (int k = 0; k < _modeButtons.Length; k++)
+        {
+            var mode = (CollectMode)k;
+            _modeButtons[k].Click += (_, _) => SetCollectMode(mode);
+        }
 
         _back.Click += (_, _) => ShowPage(settings: false);
         _guide.Click += (_, _) => OpenGuide();
@@ -358,11 +416,9 @@ public sealed class MainForm : Form
         _invite.Click += async (_, _) => await OpenInviteAsync();
         _testSettings.Click += async (_, _) => await TestSendAsync();
         _channels.Combo.SelectedIndexChanged += (_, _) => OnChannelPicked();
-        _openFolder.Click += (_, _) =>
-        {
-            Directory.CreateDirectory(AppSettings.CollectRoot);
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{AppSettings.CollectRoot}\"") { UseShellExecute = true });
-        };
+        _openFolder.Click += (_, _) => OpenFolder(AppSettings.CollectRoot);
+        _openEvidence.Click += (_, _) => OpenFolder(AppSettings.EvidenceRoot);
+        _openJournal.Click += (_, _) => OpenFolder(AppSettings.JournalRoot);
     }
 
     Card StepCard(string number, string title, int width, out int contentTop)
@@ -402,14 +458,17 @@ public sealed class MainForm : Form
     {
         base.OnShown(e);
         _log.Write("Started");
-        _collect.Checked = _settings.CollectData;
-        if (_collect.Checked) SetCollecting(true);
-        _collect.CheckedChanged += (_, _) =>
+        _collectMode = _settings.Collect;
+        _diag.AppStarted(_noSend, CollectModes.Name(_collectMode), _settings.SaveAlertEvidence);
+        UpdateModeButtons();
+        if (_collectMode != CollectMode.Off) SetCollecting(_collectMode);
+        _evidence.Checked = _settings.SaveAlertEvidence;
+        _evidence.CheckedChanged += (_, _) =>
         {
-            _settings.CollectData = _collect.Checked;
+            _settings.SaveAlertEvidence = _diag.SaveEvidence = _evidence.Checked;
             SaveSettings();
-            SetCollecting(_collect.Checked);
-            _log.Write(_collect.Checked ? "Collect data: on" : "Collect data: off");
+            _log.Write("Alert evidence: " + (_evidence.Checked ? "on" : "off"));
+            _diag.OnSetting("evidence", _evidence.Checked);
         };
         RemeasureFolder();
         UpdateGameTile();
@@ -436,6 +495,8 @@ public sealed class MainForm : Form
         _watcher.Dispose();
         _alerts.Dispose();
         try { Task.Run(async () => await _bot.DisposeAsync()).Wait(TimeSpan.FromSeconds(4)); } catch (AggregateException) { }
+        _diag.AppStopped();
+        _diag.Dispose();
         _log.Write("Exited");
         base.OnFormClosed(e);
     }
@@ -446,7 +507,14 @@ public sealed class MainForm : Form
     void OnWatchEvent(WatchEvent e, Frame? frame, HudScale scale)
     {
         _log.Write($"Event: {e.Kind}");
+        bool enabled = _settings.IsAlertEnabled(AlertIds.For(e));
         var queued = _alerts.OnEvent(e, frame, scale);
+        string result = _watcher.Paused ? AlertResults.Paused
+            : !enabled ? AlertResults.RowDisabled
+            : queued is null ? AlertResults.QueueFull
+            : _noSend ? AlertResults.SendingOff
+            : AlertResults.Pending;
+        _diag.OnAlert(e, frame, result, queued);
         if (queued is not null)
             OnUi(() => _lastAlert.Text = $"แจ้งเตือนล่าสุด: {e.Message} · {e.Time.ToString("HH:mm", Inv)} (กำลังส่ง...)");
         OnUi(UpdateRows);
@@ -626,6 +694,7 @@ public sealed class MainForm : Form
         _bot.ChosenGuildId = c.GuildId;
         _bot.ChosenChannelId = c.ChannelId;
         _log.Write($"Channel chosen: {c.GuildId}/{c.ChannelId}");
+        _diag.OnSetting("discord.channel", $"{c.GuildId}/{c.ChannelId}");
         _ = Task.Run(_bot.EnsureSlashCommandAsync);
         _channelNote.Text = "บอทจะส่งแจ้งเตือนเข้าห้องนี้";
         UpdateDiscordTile();
@@ -692,17 +761,77 @@ public sealed class MainForm : Form
         catch (Exception ex) { _log.Write("Could not open " + target, ex); }
     }
 
-    // ---------------------------------------------------------------- collect data (unchanged behaviour)
+    // ---------------------------------------------------------------- collect data / diagnostics
 
-    void SetCollecting(bool on)
+    /// <summary>"ตอนนี้" of any row, for the journal (polling or Discord thread).</summary>
+    string RowText(string id) => id switch
+    {
+        AlertIds.Death => _watcher.DeathActive ? "dead" : _watcher.Status.State == GameState.Found ? "ok" : "—",
+        AlertIds.GameDropped => _watcher.DropActive ? "dropped" : _watcher.GameEverSeen ? "ok" : "—",
+        _ => _watcher.Readings.Get(id).Text,
+    };
+
+    /// <summary>Alert threshold of a row for the journal (null for death / game dropped).</summary>
+    int? RowThreshold(string id) => id switch
+    {
+        AlertIds.Death or AlertIds.GameDropped => null,
+        AlertIds.GunAmmoEmpty or AlertIds.MissileEmpty => 0,
+        AlertIds.Kill300 => _config.Kill.Target,
+        _ => _watcher.ThresholdOf(id),
+    };
+
+    void SetCollectMode(CollectMode mode)
+    {
+        if (mode == _collectMode) return;
+        _collectMode = mode;
+        _settings.Collect = mode;
+        SaveSettings();
+        UpdateModeButtons();
+        SetCollecting(mode);
+        _log.Write("Collect mode: " + CollectModes.Name(mode));
+        _diag.OnSetting("collect_mode", CollectModes.Name(mode));
+    }
+
+    void UpdateModeButtons()
+    {
+        for (int k = 0; k < _modeButtons.Length; k++)
+        {
+            _modeButtons[k].Kind = k == (int)_collectMode ? ButtonKind.Primary : ButtonKind.Secondary;
+            _modeButtons[k].Invalidate();
+        }
+        _modeHint.Text = _collectMode switch
+        {
+            CollectMode.Auto => "เก็บเฉพาะช่วงที่น่าสนใจ เช่น น้ำมันต่ำ ของใกล้หมด มีการเตือน หรืออ่านค่าไม่ได้",
+            CollectMode.Always => "เก็บภาพ HUD ตลอดเวลาที่เฝ้า (ไฟล์เยอะที่สุด)",
+            _ => "ไม่เก็บภาพ HUD",
+        };
+    }
+
+    void OpenFolder(string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(path);
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex) { _log.Write("Could not open " + path, ex); }
+    }
+
+    void SetCollecting(CollectMode mode)
     {
         DataCollector? next = null;
-        if (on)
+        if (mode != CollectMode.Off)
         {
             var c = _config.Collect;
             var store = new CollectStore(AppSettings.CollectRoot, (long)(c.MaxMegabytes * 1024 * 1024), c.QueueLimit);
             store.Start();
-            next = new DataCollector(c, store);
+            if (mode == CollectMode.Auto)
+            {
+                var rules = new AutoCollectRules(_config, c.Regions.Select(r => r.Name).ToArray());
+                next = new DataCollector(c, store, rules, _watcher.Ring, _config.Diagnostics.Auto.PreSeconds);
+                next.AutoChanged += _diag.OnAutoCollect;
+            }
+            else next = new DataCollector(c, store);
         }
         var old = _watcher.SwapCollector(next);
         if (old is not null)
@@ -725,10 +854,15 @@ public sealed class MainForm : Form
         var active = _watcher.CurrentCollector;
         long bytes = active is not null ? active.Store.TotalBytes : Interlocked.Read(ref _measuredBytes);
         string size = bytes < 0 ? "-" : $"{bytes / (1024.0 * 1024.0):F1} MB";
-        _collectSize.Text = $"ขนาดโฟลเดอร์ {size} / {_config.Collect.MaxMegabytes:F0} MB";
+        _collectSize.Text = $"ภาพ HUD: {size} / {_config.Collect.MaxMegabytes:F0} MB";
+        var d = _config.Diagnostics;
+        _evidenceSize.Text = $"ภาพตอนเตือน: {Mb(_diag.Evidence.TotalBytes)} / {d.EvidenceMaxMegabytes:F0} MB";
+        _journalSize.Text = $"บันทึกเหตุการณ์: {Mb(_diag.Journal.TotalBytes)} / {d.JournalMaxMegabytes:F0} MB";
     }
 
     // ---------------------------------------------------------------- helpers
+
+    static string Mb(long bytes) => $"{bytes / (1024.0 * 1024.0):F1} MB";
 
     void SaveSettings()
     {

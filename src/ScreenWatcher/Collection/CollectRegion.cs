@@ -49,7 +49,8 @@ public sealed class CollectRegion
     }
 }
 
-public enum SaveReason { Change, Heartbeat, Event, Periodic }
+/// <summary>Pre = taken from the in-memory ring just before an auto-collection rule started.</summary>
+public enum SaveReason { Change, Heartbeat, Event, Periodic, Pre }
 
 /// <summary>
 /// When to save one region: never twice within MinGap; on a content change once MinGap has

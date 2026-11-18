@@ -8,7 +8,28 @@ namespace ScreenWatcher.Config;
 /// Discord channel chosen). The bot token is NOT kept here (see <see cref="TokenStore"/>).</summary>
 public sealed class AppSettings
 {
+    /// <summary>Old on/off "Collect data" setting (before collection modes). Kept so older
+    /// settings files migrate (on → เปิดตลอด, off → ปิด); it follows <see cref="Collect"/>.</summary>
     public bool CollectData { get; set; }
+
+    /// <summary>Collection mode as saved: "off", "auto" or "always"; null in a file written before
+    /// modes existed (then <see cref="CollectData"/> decides).</summary>
+    public string? CollectMode { get; set; }
+
+    /// <summary>"เก็บภาพทุกครั้งที่เตือน": save the full frame + HUD crop of every alert (default off).</summary>
+    public bool SaveAlertEvidence { get; set; }
+
+    /// <summary>The collection mode in use (ปิด / อัตโนมัติ / เปิดตลอด).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public CollectMode Collect
+    {
+        get => CollectModes.Parse(CollectMode) ?? (CollectData ? Config.CollectMode.Always : Config.CollectMode.Off);
+        set
+        {
+            CollectMode = CollectModes.Name(value);
+            CollectData = value == Config.CollectMode.Always;
+        }
+    }
 
     /// <summary>The Discord server and text channel alerts go to (null = not chosen yet).</summary>
     public ulong? DiscordGuildId { get; set; }
@@ -35,6 +56,8 @@ public sealed class AppSettings
 
     public static string DefaultPath => Path.Combine(DataRoot, "settings.json");
     public static string CollectRoot => Path.Combine(DataRoot, "collect");
+    public static string EvidenceRoot => Path.Combine(DataRoot, "evidence");
+    public static string JournalRoot => Path.Combine(DataRoot, "journal");
 
     public static AppSettings Load(string path)
     {
@@ -58,6 +81,24 @@ public sealed class AppSettings
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(this, Options));
     }
+}
+
+/// <summary>Collection mode: ปิด (off), อัตโนมัติ (auto: only while a rule is true), เปิดตลอด (always).</summary>
+public enum CollectMode { Off, Auto, Always }
+
+public static class CollectModes
+{
+    public static string Name(CollectMode m) => m switch { CollectMode.Auto => "auto", CollectMode.Always => "always", _ => "off" };
+
+    public static CollectMode? Parse(string? s) => s?.Trim().ToLowerInvariant() switch
+    {
+        "off" => CollectMode.Off,
+        "auto" => CollectMode.Auto,
+        "always" => CollectMode.Always,
+        _ => null,
+    };
+
+    public static string Thai(CollectMode m) => m switch { CollectMode.Auto => "อัตโนมัติ", CollectMode.Always => "เปิดตลอด", _ => "ปิด" };
 }
 
 /// <summary>Stable alert ids used in settings.json and the main window's rows.</summary>

@@ -11,6 +11,8 @@ public interface ISlashInteraction
     Task DeferAsync();
     Task FollowupAsync(string text);
     Task FollowupWithFileAsync(byte[] png, string fileName, string text);
+    /// <summary>A string option the user typed (null when absent).</summary>
+    string? GetString(string name) => null;
 }
 
 /// <summary>
@@ -18,7 +20,7 @@ public interface ISlashInteraction
 /// "ไม่พบหน้าต่างเกม" when the game is not found. In any other channel it answers only the person
 /// who typed it (ephemeral) and posts nothing.
 /// </summary>
-public sealed class SsCommandHandler(Func<SnapshotResult> snapshot, Func<ulong?> chosenChannelId)
+public sealed class SsCommandHandler(Func<SnapshotResult> snapshot, Func<ulong?> chosenChannelId, Action<string>? onResult = null)
 {
     public const string CommandName = "ss";
     public const string CommandDescription = "ส่งภาพจอเกมตอนนี้";
@@ -37,6 +39,7 @@ public sealed class SsCommandHandler(Func<SnapshotResult> snapshot, Func<ulong?>
         var chosen = chosenChannelId();
         if (chosen is null || i.ChannelId != chosen)
         {
+            Report("wrong_channel");
             await i.RespondEphemeralAsync(WrongChannelText);
             return true;
         }
@@ -46,6 +49,7 @@ public sealed class SsCommandHandler(Func<SnapshotResult> snapshot, Func<ulong?>
         try { r = await Task.Run(snapshot); }
         catch (Exception) { r = new SnapshotResult(GameState.Error, null); }
 
+        Report(r.Png is { Length: > 0 } ? "image" : r.State.ToString());
         if (r.Png is { Length: > 0 } png)
             await i.FollowupWithFileAsync(png, $"ss_{DateTime.Now:yyyyMMdd_HHmmss}.png", ImageText);
         else
@@ -56,5 +60,10 @@ public sealed class SsCommandHandler(Func<SnapshotResult> snapshot, Func<ulong?>
                 _ => FailedText,
             });
         return true;
+    }
+
+    void Report(string outcome)
+    {
+        try { onResult?.Invoke(outcome); } catch { }
     }
 }

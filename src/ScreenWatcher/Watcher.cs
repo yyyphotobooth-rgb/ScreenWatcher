@@ -3,6 +3,7 @@ using ScreenWatcher.Collection;
 using ScreenWatcher.Config;
 using ScreenWatcher.Detection;
 using ScreenWatcher.Detection.Hud;
+using ScreenWatcher.Diagnostics;
 using ScreenWatcher.Imaging;
 
 namespace ScreenWatcher;
@@ -14,6 +15,11 @@ public sealed record GameStatus(GameState State, int Width = 0, int Height = 0, 
 
 /// <summary>Result of an on-demand full-frame snapshot (Discord /ss).</summary>
 public sealed record SnapshotResult(GameState State, byte[]? Png);
+
+/// <summary>What /miss keeps: the full client frame now (BGRA rented from ArrayPool, null when the
+/// game cannot be seen) and the ring's HUD crops from the last seconds. The receiver returns the
+/// buffers (an EvidenceJob does so itself).</summary>
+public sealed record MissCapture(GameState State, DateTime Time, byte[]? FramePixels, int Width, int Height, HudScale Scale, IReadOnlyList<RingCrop> Ring);
 
 /// <summary>
 /// Polls about once per second on a thread-pool timer: find the game window, feed the drop
@@ -32,6 +38,11 @@ public sealed class Watcher : IDisposable
     readonly IReadOnlyList<IFrameDetector> _frameDetectors;
     readonly IReadOnlyList<IHudDetector> _hudDetectors;
     readonly List<WatchEvent> _hudEvents = [];
+    readonly IArmedState[] _armables;
+    readonly Dictionary<string, bool> _armed = new(StringComparer.Ordinal), _armedBefore = new(StringComparer.Ordinal);
+    readonly Dictionary<string, int> _defaultThresholds = new(StringComparer.OrdinalIgnoreCase);
+    readonly Func<string, string> _readingText;
+    readonly Func<string, int> _threshold;
     // Held while the game is being found/captured (poll or snapshot), so the reused frame
     // buffer and the capture session are never used by two threads at once.
     readonly object _gate = new();
@@ -63,8 +74,29 @@ public sealed class Watcher : IDisposable
         _hudDetectors = [new AmmoDetector(config, glyphs, Readings), new FuelDetector(config, Readings, Options),
             new KillDetector(config, glyphs, Readings),
             new ItemDetector(config, IconSet.Load(Path.Combine(AppContext.BaseDirectory, IconSet.FileName)), Readings, Options)];
+        _armables = [.. _hudDetectors.OfType<IArmedState>()];
+        Ring = new HudRing(config.Collect.Regions.Select(r => new CollectRegion(r)),
+            Math.Max(1, (int)Math.Ceiling(config.Diagnostics.RingSeconds * 1000.0 / Math.Max(1, config.PollIntervalMs))));
+        _defaultThresholds[AlertIds.FuelLow] = config.Fuel.DefaultThresholdPercent;
+        foreach (var item in config.Items.Items) _defaultThresholds[item.Id] = item.DefaultThreshold;
+        _readingText = id => Readings.Get(id).Text;
+        _threshold = id => Options.Threshold(id, _defaultThresholds.GetValueOrDefault(id));
+        CopyArmed(_armedBefore);
         ResetHud();
     }
+
+    /// <summary>The last few seconds of HUD region crops (always on; /miss and auto collection).</summary>
+    public HudRing Ring { get; }
+
+    /// <summary>Raised on the polling thread after every poll that processed a frame (rows are current).</summary>
+    public event Action<DateTime>? Polled;
+
+    /// <summary>Raised on the polling thread when an alert re-arms (fired earlier, now ready to fire
+    /// again). Key = alert row id, or "id:gone" for an item row's "หมด" alert.</summary>
+    public event Action<string>? Rearmed;
+
+    /// <summary>The threshold a row uses now (user's value or the row's default).</summary>
+    public int ThresholdOf(string alertId) => _threshold(alertId);
 
     /// <summary>Latest value of every HUD row (the "ตอนนี้" column).</summary>
     public HudReadings Readings { get; } = new();
@@ -129,11 +161,65 @@ public sealed class Watcher : IDisposable
             _hudEvents.Clear();
             foreach (var d in _hudDetectors) d.Process(_frame, scale, now, _hudEvents);
             foreach (var e in _hudEvents) Raise(e);
-            _collector?.OnFrame(_frame, scale, now);
+            Ring.Push(_frame, scale, now);
+            _collector?.OnFrame(_frame, scale, now, new AutoInputs(now, scale, _scale.Current, _readingText, _threshold));
+            CheckRearmed();
+            Polled?.Invoke(now);
         }
         catch (Exception ex)
         {
             NoFrame(new(GameState.Error, Detail: ex.Message));
+        }
+        finally { Monitor.Exit(_gate); }
+    }
+
+    void CopyArmed(Dictionary<string, bool> into)
+    {
+        into[AlertIds.Death] = _death.Armed;
+        into[AlertIds.GameDropped] = !_drop.Fired;
+        foreach (var a in _armables) a.CopyArmed(into);
+    }
+
+    void CheckRearmed()
+    {
+        CopyArmed(_armed);
+        foreach (var (id, armed) in _armed)
+        {
+            if (armed && _armedBefore.TryGetValue(id, out bool before) && !before)
+                try { Rearmed?.Invoke(id); } catch (Exception) { }
+            _armedBefore[id] = armed;
+        }
+    }
+
+    /// <summary>
+    /// For /miss: captures the whole client area now (works while paused) and copies the ring's
+    /// crops from the last RingSeconds. Read-only, like polling. When the game cannot be seen,
+    /// nothing is kept (State says why).
+    /// </summary>
+    public MissCapture CaptureForMiss()
+    {
+        var now = DateTime.Now;
+        if (!Monitor.TryEnter(_gate, TimeSpan.FromSeconds(5))) return new(GameState.Error, now, null, 0, 0, _lastScale, []);
+        try
+        {
+            IntPtr hwnd = _finder.Find();
+            GameState state = GameState.Found;
+            if (hwnd == IntPtr.Zero) state = GameState.NotFound;
+            else switch (_capture.Capture(hwnd, _frame))
+            {
+                case CaptureResult.Minimized: state = GameState.Minimized; break;
+                case CaptureResult.Failed: state = GameState.CaptureFailed; break;
+                default: if (_frame.LooksBlank()) state = GameState.Blank; break;
+            }
+            if (state != GameState.Found) return new(state, now, null, 0, 0, _lastScale, []);
+            var px = System.Buffers.ArrayPool<byte>.Shared.Rent(_frame.Width * _frame.Height * 4);
+            _frame.CopyRect(new System.Drawing.Rectangle(0, 0, _frame.Width, _frame.Height), px);
+            var ring = Ring.Snapshot(now - TimeSpan.FromSeconds(_config.Diagnostics.RingSeconds), now.AddSeconds(1));
+            return new(GameState.Found, now, px, _frame.Width, _frame.Height, _lastScale, ring);
+        }
+        catch (Exception)
+        {
+            return new(GameState.Error, now, null, 0, 0, _lastScale, []);
         }
         finally { Monitor.Exit(_gate); }
     }
@@ -169,6 +255,7 @@ public sealed class Watcher : IDisposable
         foreach (var d in _frameDetectors) d.ResetTiming();
         ResetHud();
         SetStatus(status);
+        CheckRearmed();
     }
 
     void ResetHud()

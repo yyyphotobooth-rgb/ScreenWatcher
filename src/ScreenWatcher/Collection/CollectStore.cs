@@ -13,7 +13,7 @@ namespace ScreenWatcher.Collection;
 /// <see cref="ArrayPool{T}.Shared"/>; the store returns it after writing (or dropping) the job.</summary>
 public sealed record SaveJob(
     byte[] Pixels, int Width, int Height, DateTime Time, string Region, SaveReason Reason, string Suffix,
-    int ClientWidth, int ClientHeight, HudScale Scale);
+    int ClientWidth, int ClientHeight, HudScale Scale, string? Rule = null);
 
 /// <summary>
 /// Owns the collect folder: &lt;root&gt;\yyyy-MM-dd\*.png plus one index.csv per day. All file
@@ -164,7 +164,7 @@ public sealed partial class CollectStore : IDisposable
                 job.ClientHeight.ToString(CultureInfo.InvariantCulture),
                 job.Scale.X.ToString("F4", CultureInfo.InvariantCulture),
                 job.Scale.Y.ToString("F4", CultureInfo.InvariantCulture),
-                reason) + "\r\n";
+                job.Rule is null ? reason : reason + "+" + job.Rule) + "\r\n";
             string text = isNew ? IndexHeader + "\r\n" + row : row;
             File.AppendAllText(index, text);
             Interlocked.Add(ref _totalBytes, text.Length); // ASCII only
@@ -184,6 +184,7 @@ public sealed partial class CollectStore : IDisposable
         SaveReason.Change => "change",
         SaveReason.Heartbeat => "heartbeat",
         SaveReason.Event => "event",
+        SaveReason.Pre => "pre",
         _ => "periodic",
     };
 

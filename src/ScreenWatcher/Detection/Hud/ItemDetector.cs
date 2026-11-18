@@ -15,11 +15,12 @@ namespace ScreenWatcher.Detection.Hud;
 /// side chosen in the row (left by default) is watched. If that one runs out the row does not
 /// move to the other icon by itself.
 /// </summary>
-public sealed class ItemDetector : IHudDetector
+public sealed class ItemDetector : IHudDetector, IArmedState
 {
     sealed class State(ItemDef def, int stablePolls)
     {
         public readonly ItemDef Def = def;
+        public readonly string GoneKey = def.Id + ":gone";
         public readonly StableValue<int> Count = new(stablePolls);
         public bool Seen, ArmedLow = true, GoneFired;
         public int PresentRun, AbsentRun, HiddenRun;
@@ -127,6 +128,15 @@ public sealed class ItemDetector : IHudDetector
     /// <summary>Thai words follow each other without a space, but a name ending in Latin letters
     /// ("ยา SP") needs one before the next word.</summary>
     static string Spaced(string name) => char.IsAsciiLetterOrDigit(name[^1]) ? name + " " : name;
+
+    public void CopyArmed(IDictionary<string, bool> into)
+    {
+        foreach (var st in _states)
+        {
+            into[st.Def.Id] = st.ArmedLow;
+            into[st.GoneKey] = !st.GoneFired;
+        }
+    }
 
     public void Reset()
     {

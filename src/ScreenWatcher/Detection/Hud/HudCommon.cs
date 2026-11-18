@@ -18,6 +18,13 @@ public interface IHudDetector
     void Reset();
 }
 
+/// <summary>Read-only view of a detector's alert arming (journal "rearm" records). Key = alert row
+/// id (item rows also "id:gone"); true = ready to fire.</summary>
+public interface IArmedState
+{
+    void CopyArmed(IDictionary<string, bool> into);
+}
+
 /// <summary>What a row shows under "ตอนนี้". Reached = at/under its alert threshold.
 /// TwoFound = two icons of this potion type are on the bar (the row shows its left/right chooser).</summary>
 public readonly record struct RowReading(string Text, bool Reached, bool TwoFound = false)

@@ -33,16 +33,27 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
 
     readonly AppLog _log;
     readonly SsCommandHandler _ss;
+    readonly MissCommandHandler? _miss;
     readonly SemaphoreSlim _connectGate = new(1, 1);
     DiscordSocketClient? _client;
     BotStatus _status = new(BotState.NotSetUp);
     ulong? _registeredGuild;
     bool _stopping;
 
-    public DiscordBot(AppLog log, SsCommandHandler ss)
+    public DiscordBot(AppLog log, SsCommandHandler ss, MissCommandHandler? miss = null)
     {
         _log = log;
         _ss = ss;
+        _miss = miss;
+    }
+
+    /// <summary>A Discord problem worth keeping in the journal (library warnings/errors, login or
+    /// command registration failures). Text only, never message contents.</summary>
+    public event Action<string>? Problem;
+
+    void ReportProblem(string text)
+    {
+        try { Problem?.Invoke(text); } catch { }
     }
 
     public BotStatus Status => _status;
@@ -70,7 +81,13 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
                 LogLevel = LogSeverity.Warning,
                 AlwaysDownloadUsers = false,
             });
-            client.Log += m => { _log.Write($"Discord {m.Severity}: {m.Source}: {m.Message} {m.Exception?.Message}"); return Task.CompletedTask; };
+            client.Log += m =>
+            {
+                string text = $"Discord {m.Severity}: {m.Source}: {m.Message} {m.Exception?.Message}";
+                _log.Write(text);
+                ReportProblem(text);
+                return Task.CompletedTask;
+            };
             client.Ready += () => OnReadyAsync(client);
             client.Disconnected += ex =>
             {
@@ -97,6 +114,7 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
             catch (Exception ex)
             {
                 _log.Write("Discord login failed", ex);
+                ReportProblem($"login failed: {ex.GetType().Name}: {ex.Message}");
                 SetStatus(new(BotState.Error, null, ReasonFor(ex)));
                 await StopClientAsync();
             }
@@ -124,7 +142,7 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
         try { ChannelsChanged?.Invoke(); } catch (Exception ex) { _log.Write("ChannelsChanged handler", ex); }
     }
 
-    /// <summary>Registers /ss for the chosen server only (guild commands appear immediately).</summary>
+    /// <summary>Registers /ss (and /miss) for the chosen server only (guild commands appear immediately).</summary>
     public async Task EnsureSlashCommandAsync()
     {
         var client = _client;
@@ -137,16 +155,34 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
                 .WithName(SsCommandHandler.CommandName)
                 .WithDescription(SsCommandHandler.CommandDescription)
                 .Build());
+            if (_miss is not null)
+                await guild.CreateApplicationCommandAsync(new SlashCommandBuilder()
+                    .WithName(MissCommandHandler.CommandName)
+                    .WithDescription(MissCommandHandler.CommandDescription)
+                    .AddOption(MissCommandHandler.NoteOption, ApplicationCommandOptionType.String, MissCommandHandler.NoteDescription, isRequired: false)
+                    .Build());
             _registeredGuild = gid;
-            _log.Write($"/ss registered for server {gid}");
+            _log.Write($"/ss{(_miss is null ? "" : " and /miss")} registered for server {gid}");
         }
-        catch (Exception ex) { _log.Write("Could not register /ss", ex); }
+        catch (Exception ex)
+        {
+            _log.Write("Could not register slash commands", ex);
+            ReportProblem($"slash command registration failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     async Task HandleSlashAsync(SocketSlashCommand cmd)
     {
-        try { await _ss.HandleAsync(new SocketSlashAdapter(cmd)); }
-        catch (Exception ex) { _log.Write("/ss failed", ex); }
+        try
+        {
+            var i = new SocketSlashAdapter(cmd);
+            if (!await _ss.HandleAsync(i) && _miss is not null) await _miss.HandleAsync(i);
+        }
+        catch (Exception ex)
+        {
+            _log.Write($"/{cmd.CommandName} failed", ex);
+            ReportProblem($"/{cmd.CommandName} failed: {ex.GetType().Name}");
+        }
     }
 
     /// <summary>Text channels in every server the bot is in where it may view, send and attach files.</summary>
@@ -247,6 +283,8 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
         public Task RespondEphemeralAsync(string text) => c.RespondAsync(text, ephemeral: true);
         public Task DeferAsync() => c.DeferAsync();
         public Task FollowupAsync(string text) => c.FollowupAsync(text);
+        public string? GetString(string name) =>
+            c.Data.Options.FirstOrDefault(o => o.Name == name)?.Value as string;
         public async Task FollowupWithFileAsync(byte[] png, string fileName, string text)
         {
             using var ms = new MemoryStream(png, writable: false);

@@ -21,7 +21,7 @@ public readonly record struct KillObservation(bool Readable, int? Value)
 /// The counter can go up every second in combat, so "stable" here means: equal to the previous
 /// poll's reading, or continuing it upwards by at most MaxStepPerPoll.
 /// </summary>
-public sealed class KillDetector : IHudDetector
+public sealed class KillDetector : IHudDetector, IArmedState
 {
     readonly KillConfig _c;
     readonly DigitFieldReader _reader;
@@ -90,6 +90,8 @@ public sealed class KillDetector : IHudDetector
         else if (_unreadableRun >= StableValue<int>.UnknownAfter) _readings.Set(AlertIds.Kill300, RowReading.Unknown);
         return fire;
     }
+
+    public void CopyArmed(IDictionary<string, bool> into) => into[AlertIds.Kill300] = _armed;
 
     public void Reset()
     {

@@ -91,7 +91,7 @@ public sealed class FuelArcReader(FuelConfig config)
 /// Fuel alert: fires once when the estimated % is at or below the row threshold on StablePolls
 /// consecutive polls; re-arms when the estimate is at least RearmMarginPercent above the threshold.
 /// </summary>
-public sealed class FuelDetector(WatcherConfig config, HudReadings readings, HudOptions options) : IHudDetector
+public sealed class FuelDetector(WatcherConfig config, HudReadings readings, HudOptions options) : IHudDetector, IArmedState
 {
     readonly FuelConfig _c = config.Fuel;
     readonly FuelArcReader _reader = new(config.Fuel);
@@ -132,6 +132,8 @@ public sealed class FuelDetector(WatcherConfig config, HudReadings readings, Hud
         else readings.Set(AlertIds.FuelLow, RowReading.Unknown);
         return fire;
     }
+
+    public void CopyArmed(IDictionary<string, bool> into) => into[AlertIds.FuelLow] = _armed;
 
     public void Reset()
     {
