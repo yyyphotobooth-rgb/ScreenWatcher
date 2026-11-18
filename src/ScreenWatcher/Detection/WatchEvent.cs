@@ -1,12 +1,16 @@
+using System.Drawing;
+
 namespace ScreenWatcher.Detection;
 
-public enum WatchEventKind { Death, GameDropped }
+public enum WatchEventKind { Death, GameDropped, Hud }
 
-public sealed record WatchEvent(WatchEventKind Kind, string Message, DateTime Time);
+/// <summary>An event to alert about. <c>Hud</c> events (ammo, fuel, kill counter, items) carry the
+/// alert row id they belong to and the frame rectangle of the HUD part concerned.</summary>
+public sealed record WatchEvent(WatchEventKind Kind, string Message, DateTime Time, string? AlertId = null, Rectangle Crop = default);
 
 /// <summary>
-/// A detector that looks at captured client-area frames. New detectors (e.g. ammo counters)
-/// implement this and are added to the list the Watcher runs each poll.
+/// A detector that looks at captured client-area frames and raises at most one event per poll
+/// (death). HUD value readers implement <see cref="Hud.IHudDetector"/> instead.
 /// </summary>
 public interface IFrameDetector
 {

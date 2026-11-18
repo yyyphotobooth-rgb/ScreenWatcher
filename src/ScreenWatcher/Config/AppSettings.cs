@@ -22,6 +22,12 @@ public sealed class AppSettings
     public bool IsAlertEnabled(string id) => AlertsEnabled.GetValueOrDefault(id, true);
     public void SetAlertEnabled(string id, bool on) => AlertsEnabled[id] = on;
 
+    /// <summary>Per-row alert threshold by alert id; missing = the row's default.</summary>
+    public Dictionary<string, int> Thresholds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Potion rows where the user chose the RIGHT one of two same-type icons (default left).</summary>
+    public Dictionary<string, bool> WatchRight { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     static readonly JsonSerializerOptions Options = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
 
     public static string DataRoot { get; } =
@@ -38,6 +44,8 @@ public sealed class AppSettings
             {
                 var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Options) ?? new();
                 s.AlertsEnabled = new Dictionary<string, bool>(s.AlertsEnabled ?? [], StringComparer.OrdinalIgnoreCase);
+                s.Thresholds = new Dictionary<string, int>(s.Thresholds ?? [], StringComparer.OrdinalIgnoreCase);
+                s.WatchRight = new Dictionary<string, bool>(s.WatchRight ?? [], StringComparer.OrdinalIgnoreCase);
                 return s;
             }
         }
@@ -57,11 +65,21 @@ public static class AlertIds
 {
     public const string Death = "death";
     public const string GameDropped = "gameDropped";
+    public const string GunAmmoEmpty = "gunAmmoEmpty";
+    public const string MissileEmpty = "missileEmpty";
+    public const string AmmoBox = "ammoBox";
+    public const string FuelLow = "fuelLow";
+    public const string FuelBottles = "fuelBottles";
+    public const string MonsterCard = "monsterCard";
+    public const string HpPotions = "hpPotions";
+    public const string ShieldPotions = "shieldPotions";
+    public const string SpPotions = "spPotions";
+    public const string Kill300 = "kill300";
 
-    public static string For(WatchEventKind kind) => kind switch
+    public static string For(WatchEvent e) => e.AlertId ?? e.Kind switch
     {
         WatchEventKind.Death => Death,
         WatchEventKind.GameDropped => GameDropped,
-        _ => kind.ToString(),
+        _ => e.Kind.ToString(),
     };
 }

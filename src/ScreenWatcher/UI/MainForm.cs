@@ -146,12 +146,25 @@ public sealed class MainForm : Form
         colHeader.Controls.AddRange([h1, h2, h3]);
         table.Controls.Add(colHeader);
 
-        int ry = S(34);
+        // Everything below the table: gap, buttons, gap, last-alert line, bottom padding.
+        int below = S(14) + S(44) + S(14) + S(22) + pad;
+        int rowsH = AlertRowCatalog.All.Sum(s => s.Implemented ? S(48) : S(44));
+        // One page: the whole list is shown when the screen is tall enough; only on a short screen
+        // the list gets its own scroll bar (the rest of the window stays put).
+        var work = Screen.FromPoint(Location).WorkingArea;
+        int roomForRows = work.Bottom - Location.Y - SystemInformation.CaptionHeight - S(16) - y - S(34) - below;
+        bool scroll = rowsH > roomForRows;
+        int listH = scroll ? Math.Max(S(48) * 3, roomForRows) : rowsH;
+        var list = new Panel { BackColor = Theme.Surface, AutoScroll = scroll };
+        list.SetBounds(0, S(34), tableW, listH);
+        int rowW = scroll ? tableW - SystemInformation.VerticalScrollBarWidth : tableW;
+
+        int ry = 0;
         foreach (var spec in AlertRowCatalog.All)
         {
             var row = new AlertRow(spec);
             int rh = spec.Implemented ? S(48) : S(44);
-            row.SetBounds(0, ry, tableW, rh);
+            row.SetBounds(0, ry, rowW, rh);
             ry += rh;
             if (spec.Implemented)
             {
@@ -162,14 +175,39 @@ public sealed class MainForm : Form
                     SaveSettings();
                     _log.Write($"Alert {r.Spec.Id}: {(on ? "on" : "off")}");
                 };
+                if (spec.Unit is not null)
+                {
+                    row.Threshold = AlertRowCatalog.Threshold(_settings, spec);
+                    _watcher.Options.SetThreshold(spec.Id, row.Threshold);
+                    row.ThresholdChanged += (r, v) =>
+                    {
+                        _settings.Thresholds[r.Spec.Id] = v;
+                        _watcher.Options.SetThreshold(r.Spec.Id, v);
+                        SaveSettings();
+                        _log.Write($"Alert {r.Spec.Id}: threshold {v}");
+                    };
+                }
+                if (spec.SideChooser)
+                {
+                    row.WatchRight = _settings.WatchRight.GetValueOrDefault(spec.Id);
+                    _watcher.Options.SetWatchRight(spec.Id, row.WatchRight);
+                    row.SideChanged += (r, right) =>
+                    {
+                        _settings.WatchRight[r.Spec.Id] = right;
+                        _watcher.Options.SetWatchRight(r.Spec.Id, right);
+                        SaveSettings();
+                        _log.Write($"Alert {r.Spec.Id}: watch {(right ? "right" : "left")}");
+                    };
+                }
             }
             _rows.Add(row);
-            table.Controls.Add(row);
+            list.Controls.Add(row);
         }
         _rows[^1].LastRow = true;
-        table.SetBounds(pad, y, tableW, ry);
+        table.Controls.Add(list);
+        table.SetBounds(pad, y, tableW, S(34) + listH);
         _mainPage.Controls.Add(table);
-        y += ry + S(14);
+        y += S(34) + listH + S(14);
 
         // Buttons: [หยุดเฝ้าชั่วคราว (flex)] [ทดสอบส่ง] [ตั้งค่า]
         int bh = S(44), gap = S(10);
@@ -183,7 +221,7 @@ public sealed class MainForm : Form
         _lastAlert.SetBounds(pad, y, W - pad * 2, S(22));
         _mainPage.Controls.Add(_lastAlert);
         y += S(22) + pad;
-        ClientSize = new Size(W, Math.Max(y, S(600)));
+        ClientSize = new Size(W, scroll ? y : Math.Max(y, S(600)));
 
         _pause.Click += (_, _) =>
         {
@@ -440,6 +478,14 @@ public sealed class MainForm : Form
                     if (_watcher.DropActive) r.SetNow("หลุด", Theme.Error);
                     else if (st is GameState.Found or GameState.Minimized or GameState.Blank or GameState.CaptureFailed) r.SetNow("ปกติ");
                     else r.SetNow("—");
+                    break;
+                default:
+                    // HUD rows: the watcher keeps the latest stable reading per row.
+                    if (!r.Spec.Implemented) break;
+                    var now = _watcher.Readings.Get(r.Spec.Id);
+                    r.SetReached(now.Reached);
+                    r.SetChooserVisible(now.TwoFound);
+                    r.SetNow(now.Text);
                     break;
             }
         }

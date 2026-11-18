@@ -2,6 +2,7 @@ using ScreenWatcher.Capture;
 using ScreenWatcher.Collection;
 using ScreenWatcher.Config;
 using ScreenWatcher.Detection;
+using ScreenWatcher.Detection.Hud;
 using ScreenWatcher.Imaging;
 
 namespace ScreenWatcher;
@@ -29,6 +30,8 @@ public sealed class Watcher : IDisposable
     readonly DeathDetector _death;
     readonly HudScaleTracker _scale;
     readonly IReadOnlyList<IFrameDetector> _frameDetectors;
+    readonly IReadOnlyList<IHudDetector> _hudDetectors;
+    readonly List<WatchEvent> _hudEvents = [];
     // Held while the game is being found/captured (poll or snapshot), so the reused frame
     // buffer and the capture session are never used by two threads at once.
     readonly object _gate = new();
@@ -56,7 +59,16 @@ public sealed class Watcher : IDisposable
         _death = new DeathDetector(config.Death);
         _scale = new HudScaleTracker(config.HudScale);
         _frameDetectors = [_death];
+        var glyphs = GlyphSet.LoadAll(Path.Combine(AppContext.BaseDirectory, GlyphSet.FileName));
+        _hudDetectors = [new AmmoDetector(config, glyphs, Readings)];
+        ResetHud();
     }
+
+    /// <summary>Latest value of every HUD row (the "ตอนนี้" column).</summary>
+    public HudReadings Readings { get; } = new();
+
+    /// <summary>Row thresholds and choices; the UI sets them, detectors read them each poll.</summary>
+    public HudOptions Options { get; } = new();
 
     public GameStatus Status => _status;
 
@@ -76,6 +88,8 @@ public sealed class Watcher : IDisposable
         {
             _paused = value;
             if (!value) foreach (var d in _frameDetectors) d.ResetTiming();
+            // Rows go blank while paused; under the gate so a poll in flight cannot refill them.
+            else lock (_gate) ResetHud();
         }
     }
 
@@ -110,6 +124,9 @@ public sealed class Watcher : IDisposable
             var scale = _lastScale = _scale.Update(_frame);
             SetStatus(new(GameState.Found, _frame.Width, _frame.Height, scale, _scale.Current));
             foreach (var d in _frameDetectors) Raise(d.Process(_frame, scale, now));
+            _hudEvents.Clear();
+            foreach (var d in _hudDetectors) d.Process(_frame, scale, now, _hudEvents);
+            foreach (var e in _hudEvents) Raise(e);
             _collector?.OnFrame(_frame, scale, now);
         }
         catch (Exception ex)
@@ -148,7 +165,13 @@ public sealed class Watcher : IDisposable
     void NoFrame(GameStatus status)
     {
         foreach (var d in _frameDetectors) d.ResetTiming();
+        ResetHud();
         SetStatus(status);
+    }
+
+    void ResetHud()
+    {
+        foreach (var d in _hudDetectors) d.Reset();
     }
 
     void SetStatus(GameStatus s)

@@ -93,7 +93,7 @@ public sealed class DataCollector : IDisposable
     /// </summary>
     public void OnEvent(WatchEvent e, Frame? frame, HudScale scale, bool frameIsLastSeen)
     {
-        if (_disposed || frame is null || frame.Width == 0) return;
+        if (_disposed || frame is null || frame.Width == 0 || e.Kind == WatchEventKind.Hud) return;
         string suffix = "_" + (e.Kind == WatchEventKind.Death ? "death" : "dropped") + (frameIsLastSeen ? "_lastseen" : "");
         QueueFull(frame, e.Time, SaveReason.Event, suffix, scale);
     }

@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo)
 {
     public const string FileName = "detectors.json";
 
@@ -96,3 +96,21 @@ public sealed record ColourKey(string Name, int[] Min, int[] Max, int OutlineMax
 /// center (W/2,H/2). Keys = the HUD colours whose layout the change test compares.
 /// MinChangedPixels overrides the global change threshold for this region.</summary>
 public sealed record CollectRegionConfig(string Name, string Anchor, int[] Rect, ColourKey[] Keys, double? MinChangedPixels = null);
+
+/// <summary>A number drawn in fixed-pitch cells. CellX = left edge of each digit cell and Y = the
+/// cells' top, in the 1.0 layout relative to the anchor (topLeft / topRight / bottomCenter);
+/// the cell size is the glyph size of the named font in glyphs.json. Inks = the digit colours to
+/// try, in order (Detection/Hud/Ink.cs). The field is searched
+/// +-SearchPx native pixels. A digit is accepted when its match is at least MinScore and leads the
+/// next best digit by MinMargin; a cell with less ink than BlankInk is blank (allowed only in
+/// front of the number, and only with AllowBlank).</summary>
+public sealed record DigitFieldConfig(
+    string Anchor, double[] CellX, double Y, string Glyphs, string[] Inks,
+    int SearchPx, double MinScore, double MinMargin, bool AllowBlank = false, double BlankInk = 4);
+
+/// <summary>Ammo counters (top-left strip). An alert fires when a counter reads 00000 on
+/// StablePolls consecutive polls and re-arms when it reads above 0. CropRegion = the collect
+/// region sent with the alert.</summary>
+public sealed record AmmoConfig(int StablePolls, string CropRegion, AmmoCounterConfig Gun, AmmoCounterConfig Missile);
+
+public sealed record AmmoCounterConfig(string Message, DigitFieldConfig Field);

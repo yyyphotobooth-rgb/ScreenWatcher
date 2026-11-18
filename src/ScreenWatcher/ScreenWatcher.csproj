@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <None Update="detectors.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="glyphs.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="docs\discord-bot-guide.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

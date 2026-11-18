@@ -184,5 +184,27 @@
         ]
       }
     ]
+  },
+
+  // ---- HUD readers (rows added after death / game dropped) ----
+  // Digit fields: see DigitFieldConfig in Config/WatcherConfig.cs. Digit shapes are in glyphs.json.
+
+  "ammo": {
+    // Two 5-digit counters, pitch ~13.25 px at 1.0 (each digit lands on a whole pixel, so cells are
+    // searched +-searchPx one by one): machine gun cells start at x 58, missile at
+    // x 183; digit rows y 13..24 (cell = 13x14 from y 12). Digits are blue-white, and red only
+    // when the counter is exactly 00000 (collected data: 00022, 00012, 00002 are still blue).
+    "stablePolls": 2,
+    "cropRegion": "ammo",
+    "gun": {
+      "message": "กระสุนปืนกลหมด",
+      "field": { "anchor": "topLeft", "cellX": [ 58, 71, 85, 98, 111 ], "y": 12, "glyphs": "ammo", "inks": [ "ammoBlue", "ammoRed" ],
+                 "searchPx": 2, "minScore": 0.6, "minMargin": 0.03 }
+    },
+    "missile": {
+      "message": "มิสไซล์หมด",
+      "field": { "anchor": "topLeft", "cellX": [ 183, 196, 210, 223, 236 ], "y": 12, "glyphs": "ammo", "inks": [ "ammoBlue", "ammoRed" ],
+                 "searchPx": 2, "minScore": 0.6, "minMargin": 0.03 }
+    }
   }
 }

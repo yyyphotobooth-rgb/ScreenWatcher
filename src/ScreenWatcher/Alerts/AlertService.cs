@@ -43,12 +43,19 @@ public sealed class AlertComposer
     /// <summary>Must run on the polling thread (the frame buffer is reused by the next poll).</summary>
     public AlertMessage Compose(WatchEvent e, Frame? frame, HudScale scale)
     {
-        string id = AlertIds.For(e.Kind);
+        string id = AlertIds.For(e);
         if (e.Kind == WatchEventKind.Death && frame is { Width: > 0 })
         {
             var rects = DeathRects(frame.Width, frame.Height, scale);
             if (rects.Count > 0)
                 return new AlertMessage(id, e.Message, PngEncoder.Compose(frame, rects), $"death_{e.Time:yyyyMMdd_HHmmss}.png", e.Time);
+        }
+        if (e.Kind == WatchEventKind.Hud && frame is { Width: > 0 })
+        {
+            // Only the HUD part concerned, from the frame the alert fired on.
+            var crop = Rectangle.Intersect(e.Crop, new Rectangle(0, 0, frame.Width, frame.Height));
+            if (crop.Width > 0 && crop.Height > 0)
+                return new AlertMessage(id, e.Message, PngEncoder.Encode(frame, crop), $"{id}_{e.Time:yyyyMMdd_HHmmss}.png", e.Time);
         }
         return new AlertMessage(id, e.Message, null, null, e.Time);
     }
@@ -97,7 +104,7 @@ public sealed class AlertService : IDisposable
     {
         try
         {
-            if (!_isEnabled(AlertIds.For(e.Kind))) return null;
+            if (!_isEnabled(AlertIds.For(e))) return null;
             var m = _composer.Compose(e, frame, scale);
             if (_queue.Writer.TryWrite(m)) return m;
             _log.Write($"Alert dropped (queue full): {e.Kind}");
