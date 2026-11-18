@@ -82,5 +82,97 @@
       "navyMinBMinusR": 20,
       "minMatchingPatches": 6
     }
+  },
+
+  "collect": {
+    // "Collect data" mode (off by default; the user's choice is kept in
+    // %LOCALAPPDATA%\ScreenWatcher\settings.json). Files go to %LOCALAPPDATA%\ScreenWatcher\collect.
+    // When the folder grows past this size, this mode's oldest files are deleted first.
+    "maxMegabytes": 200,
+    // Per region: at most one save every N seconds, and a heartbeat save every N seconds.
+    "minSecondsBetweenSaves": 2,
+    "heartbeatSeconds": 60,
+    // Full client frame this often (plus on every death / game-dropped event).
+    "fullFrameMinutes": 5,
+    // Pending writes; when the writer falls behind, new saves are skipped (never block polling).
+    "queueLimit": 24,
+
+    // Change test (Collection/HudSignature.cs). Each region lists the HUD's own colours ("keys",
+    // RGB boxes measured from samples and from live collected crops). Each poll every pixel gets
+    // the index of the key it matches (or none); the region changed when at least
+    // minChangedPixels (at 1.0, scaled by area) differ from the last SAVED crop, at the best
+    // alignment within +-maxShift px. The scene seen through the semi-transparent panels rarely
+    // falls inside these narrow boxes. Tested on sample pairs and on 64 live kill-counter crops
+    // over sky, rock, grass, lava (CollectChangeTests).
+    "change": {
+      "maxShift": 1,
+      "minChangedPixels": 8
+    },
+
+    // Regions, measured on samples/ at 1.0 (1024x768 .. 1920x1080 clients) and checked at ~1.31
+    // where the sample shows them (see samples/README.md "Collect regions").
+    "regions": [
+      // HP/shield gauge + orange fuel arc + "xxx/300" fuel text and pump icon. Ring x 8..156,
+      // y 30..178; fuel text x ~146..181, y ~73..82; pump icon to x ~172. Quest panel starts ~x 180.
+      {
+        "name": "gauge", "anchor": "topLeft", "rect": [ 0, 24, 192, 164 ],
+        "keys": [
+          { "name": "hp red", "min": [ 120, 0, 0 ], "max": [ 220, 20, 20 ] },          // (150..170,0..8,0..8)
+          { "name": "blue fill", "min": [ 0, 95, 160 ], "max": [ 45, 130, 215 ] },     // (0..40,100..120,170..195)
+          { "name": "fuel orange", "min": [ 200, 85, 0 ], "max": [ 235, 120, 12 ] },  // arc + pump (215..223,96..108,0)
+          { "name": "yellow", "min": [ 190, 125, 0 ], "max": [ 220, 165, 12 ] },      // centre semicircle (200..211,134..153,0)
+          { "name": "text", "min": [ 215, 215, 215 ], "max": [ 229, 229, 229 ], "outlineMax": 20 } // exactly (222,222,222) on (0,0,0)
+        ]
+      },
+      // Two 5-digit counters: machine gun digits x ~60..123, missile x ~182..248, y ~12..25;
+      // reload bars y ~2..8. Buff icons start at x ~258; gauge ring at y 30.
+      {
+        "name": "ammo", "anchor": "topLeft", "rect": [ 0, 0, 256, 30 ],
+        "keys": [
+          // Digit core (207,236,254). The digits' blue outline (3..15,96..102,172..175) is NOT used:
+          // the panel tint over some skies lands on the same blue.
+          { "name": "digit core", "min": [ 195, 225, 245 ], "max": [ 215, 245, 255 ] },
+          { "name": "reload bar", "min": [ 245, 50, 0 ], "max": [ 255, 115, 20 ] },     // (255,58..105,6..11)
+          { "name": "empty red", "min": [ 215, 10, 15 ], "max": [ 250, 55, 55 ] },      // missile_empty (225..244,22..42,26..44)
+          { "name": "empty pink", "min": [ 250, 160, 160 ], "max": [ 255, 225, 225 ] }  // its digit core
+        ]
+      },
+      // Orange kill counter + wing emblem, right edge. Digits right-aligned ending at W-75,
+      // 3 digits from W-129 (each extra digit ~18 px further left), y 335..349; panel y ~330..356.
+      // Seen only at 1.0 (1024x768 and 1600x1024 clients). Map grid panel above ends at y ~326.
+      {
+        "name": "kill", "anchor": "topRight", "rect": [ -180, 326, 180, 40 ],
+        "keys": [
+          // Fill (255,83,15) with same-hue edges (~(209..254,68..83,12..15)) in 64 live crops.
+          // Lava in a dead sample measured (230..233,107..110,55..59): kept out by G and B.
+          { "name": "digits", "min": [ 200, 60, 5 ], "max": [ 255, 92, 25 ] }
+        ]
+      },
+      // Skill/item bar incl. count digits and page arrow: frame x c-168..c+160 (arrow to c+170),
+      // y H-53..H-14; status text above the bar at ~H-66. "Lv / exp %" text below (H-12..H-2)
+      // is left out on purpose (it changes with every exp gain).
+      {
+        "name": "items", "anchor": "bottomCenter", "rect": [ -190, -74, 380, 62 ],
+        "keys": [
+          // Counts are exactly (255,255,255) with a (0,0,0) outline. Bright sky above the bar
+          // measured (255,221..234,187..203), so the box is kept tight and neutral.
+          { "name": "count", "min": [ 250, 250, 250 ], "max": [ 255, 255, 255 ], "outlineMax": 20 }
+        ]
+      },
+      // Centre dialog area. Death dialog is x -189..+186, y -44..+50 from the centre.
+      {
+        "name": "dialog", "anchor": "center", "rect": [ -240, -110, 480, 220 ],
+        // A dialog is big (death dialog: ~11k key px live at 1024x768). Floating name labels and
+        // the ship hull near the centre hit the same (222,222,222) as dialog text (live noise up
+        // to ~740 changed px), so this region needs a much larger change than the others.
+        "minChangedPixels": 1000,
+        "keys": [
+          // Body (3..4,19..37,34..70). Dark river water has the same colour but is textured, so
+          // the body must be flat over +-2 px horizontally.
+          { "name": "death dialog body", "min": [ 0, 15, 30 ], "max": [ 8, 45, 75 ], "flatRadius": 2, "flatTolerance": 2 },
+          { "name": "text", "min": [ 215, 215, 215 ], "max": [ 229, 229, 229 ], "outlineMax": 75 } // exactly (222,222,222)
+        ]
+      }
+    ]
   }
 }

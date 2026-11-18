@@ -20,6 +20,8 @@ and raises events (death, game dropped).
   captured frame. PrintWindow is not used (it made the game flash white).
 - `src/ScreenWatcher/Detection`: `IFrameDetector` (add new frame detectors here, e.g. ammo), death
   analyzer + detector, game-drop detector.
+- `src/ScreenWatcher/Collection`: optional "Collect data" mode (HUD crops + full frames saved to
+  %LOCALAPPDATA%\ScreenWatcher\collect, size-capped; writes on a background thread).
 - `samples/`: reference images and their classification (`samples/README.md`).
 
 ## Commands

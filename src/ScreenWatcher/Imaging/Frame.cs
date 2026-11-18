@@ -59,6 +59,18 @@ public sealed class Frame
             Marshal.Copy(source + y * stride, _px, y * rowBytes, rowBytes);
     }
 
+    /// <summary>The current frame's BGRA pixels, row-major, Width*4 bytes per row.</summary>
+    public ReadOnlySpan<byte> Pixels => _px.AsSpan(0, Width * Height * 4);
+
+    /// <summary>Copies a rectangle (must lie inside the frame) as tightly packed BGRA rows.</summary>
+    public void CopyRect(Rectangle r, Span<byte> target)
+    {
+        if (r.X < 0 || r.Y < 0 || r.Right > Width || r.Bottom > Height) throw new ArgumentOutOfRangeException(nameof(r));
+        int rowBytes = r.Width * 4;
+        for (int y = 0; y < r.Height; y++)
+            _px.AsSpan(((r.Y + y) * Width + r.X) * 4, rowBytes).CopyTo(target.Slice(y * rowBytes, rowBytes));
+    }
+
     /// <summary>One pixel (no bounds check beyond the array's own).</summary>
     public Rgb Pixel(int x, int y)
     {

@@ -1,4 +1,5 @@
 using ScreenWatcher.Capture;
+using ScreenWatcher.Collection;
 using ScreenWatcher.Config;
 using ScreenWatcher.Detection;
 using ScreenWatcher.Imaging;
@@ -21,6 +22,9 @@ public sealed class Watcher : IDisposable
     readonly IReadOnlyList<IFrameDetector> _frameDetectors;
     System.Threading.Timer? _timer;
     volatile bool _paused;
+    volatile DataCollector? _collector;
+    bool _haveFrame, _frameIsCurrent;
+    HudScale _lastScale = HudScale.One;
     int _busy;
     string _status = "";
 
@@ -46,6 +50,12 @@ public sealed class Watcher : IDisposable
         }
     }
 
+    /// <summary>"Collect data" mode: null = off (costs one null check per poll). Set from any
+    /// thread; returns the previous collector, which the caller disposes.</summary>
+    public DataCollector? SwapCollector(DataCollector? collector) => Interlocked.Exchange(ref _collector, collector);
+
+    public DataCollector? CurrentCollector => _collector;
+
     public void Start() => _timer ??= new System.Threading.Timer(_ => Tick(), null, 0, _config.PollIntervalMs);
 
     void Tick()
@@ -54,6 +64,7 @@ public sealed class Watcher : IDisposable
         try
         {
             var now = DateTime.Now;
+            _frameIsCurrent = false;
             IntPtr hwnd = _finder.Find();
             Raise(_drop.Update(hwnd != IntPtr.Zero, now));
 
@@ -64,11 +75,13 @@ public sealed class Watcher : IDisposable
                 case CaptureResult.Minimized: NoFrame("Game: found (minimised - cannot see it)"); return;
                 case CaptureResult.Failed: NoFrame($"Game: found (capture failed: {_capture.LastError})"); return;
             }
-            if (_frame.LooksBlank()) { NoFrame("Game: found (capture is black)"); return; }
+            if (_frame.LooksBlank()) { _haveFrame = false; NoFrame("Game: found (capture is black)"); return; }
 
-            var scale = _scale.Update(_frame);
+            _haveFrame = _frameIsCurrent = true;
+            var scale = _lastScale = _scale.Update(_frame);
             SetStatus($"Game: found ({_frame.Width}x{_frame.Height}), {_scale.Describe()}");
             foreach (var d in _frameDetectors) Raise(d.Process(_frame, scale, now));
+            _collector?.OnFrame(_frame, scale, now);
         }
         catch (Exception ex)
         {
@@ -92,7 +105,10 @@ public sealed class Watcher : IDisposable
 
     void Raise(WatchEvent? e)
     {
-        if (e is not null) EventRaised?.Invoke(e);
+        if (e is null) return;
+        EventRaised?.Invoke(e);
+        // Death: the frame it was seen on. Game dropped: the last frame captured before (if any).
+        _collector?.OnEvent(e, _haveFrame ? _frame : null, _lastScale, frameIsLastSeen: !_frameIsCurrent);
     }
 
     public void Dispose()
@@ -100,6 +116,7 @@ public sealed class Watcher : IDisposable
         using var done = new ManualResetEvent(false);
         if (_timer is not null && _timer.Dispose(done)) done.WaitOne(TimeSpan.FromSeconds(3));
         _timer = null;
+        SwapCollector(null)?.Dispose();
         _capture.Dispose();
     }
 }
