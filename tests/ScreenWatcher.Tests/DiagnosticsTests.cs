@@ -240,6 +240,34 @@ public sealed class DiagnosticsTests : IDisposable
     }
 
     [Fact]
+    public void Kill_alert_evidence_saves_the_last_readable_crop_and_the_current_frame()
+    {
+        var (hub, readings, root) = MakeHub(_ => throw new InvalidOperationException());
+        hub.SaveEvidence = true;
+        var d = new Detection.Hud.KillDetector(TestData.Config, HudTestData.Glyphs, new Detection.Hud.HudReadings());
+        var events = new List<WatchEvent>();
+        var f299 = HudTestData.Kill299.Load();
+        var noPanel = HudTestData.Dead1024.Load();
+        d.Process(HudTestData.Kill298.Load(), HudScale.One, T0, events);
+        d.Process(f299, HudScale.One, T0.AddSeconds(1), events);
+        d.Process(noPanel, HudScale.One, T0.AddSeconds(2), events);
+        d.Process(noPanel, HudScale.One, T0.AddSeconds(3), events);
+        var e = Assert.Single(events);
+
+        hub.OnAlert(e, noPanel, AlertResults.Pending, null);
+        Assert.True(hub.Evidence.WaitIdle(TimeSpan.FromSeconds(10)));
+
+        var a = Records(root).Single(r => r.GetProperty("type").GetString() == "alert");
+        Assert.Equal(299, a.GetProperty("crop_value").GetInt32());
+        var files = a.GetProperty("evidence").EnumerateArray().Select(x => x.GetString()!).ToList();
+        Assert.Equal(["2026-11-18/120003_000_kill300_full.jpg", "2026-11-18/120003_000_kill300_crop.png"], files);
+        using (var full = new Bitmap(Path.Combine(_tmp, "evidence", files[0]))) Assert.Equal(new Size(1024, 768), full.Size);
+        var saved = KillTests.PngBgr(File.ReadAllBytes(Path.Combine(_tmp, "evidence", files[1])));
+        Assert.Equal(KillTests.Bgr(f299, new Rectangle(1024 - 180, 326, 180, 40)), saved);
+        hub.Dispose();
+    }
+
+    [Fact]
     public void Alert_evidence_is_off_by_default()
     {
         var (hub, _, root) = MakeHub(_ => throw new InvalidOperationException());

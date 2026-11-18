@@ -3,6 +3,7 @@ using ScreenWatcher.Alerts;
 using ScreenWatcher.Config;
 using ScreenWatcher.Detection;
 using ScreenWatcher.Detection.Hud;
+using ScreenWatcher.Imaging;
 using Xunit.Abstractions;
 using static ScreenWatcher.Tests.HudTestData;
 
@@ -217,11 +218,73 @@ public class KillTests(ITestOutputHelper output)
         Assert.Empty(events);
         d.Process(noPanel, HudScale.One, t.AddSeconds(4), events);
         var e = Assert.Single(events);
-        Assert.Equal("ยิงมอนครบ 300 ตัวแล้ว", e.Message);
+        Assert.Equal("ยิงมอนครบ 300 ตัวแล้ว (เลขล่าสุดที่เห็น 299)", e.Message);
         Assert.Equal(AlertIds.Kill300, e.AlertId);
         Assert.Equal(new Rectangle(1024 - 180, 326, 180, 40), e.Crop);
         var m = new AlertComposer(TestData.Config).Compose(e, noPanel, HudScale.One);
         using var img = new Bitmap(new MemoryStream(m.Png!));
         Assert.Equal(new Size(180, 40), img.Size);
+    }
+
+    /// <summary>BGR of a crop (alpha ignored), from a frame or a decoded PNG.</summary>
+    internal static byte[] Bgr(Frame f, Rectangle r)
+    {
+        var px = new byte[r.Width * r.Height * 4];
+        f.CopyRect(r, px);
+        return Bgr(px, r.Width * r.Height);
+    }
+
+    internal static byte[] Bgr(byte[] bgra, int pixels)
+    {
+        var o = new byte[pixels * 3];
+        for (int i = 0; i < pixels; i++) { o[i * 3] = bgra[i * 4]; o[i * 3 + 1] = bgra[i * 4 + 1]; o[i * 3 + 2] = bgra[i * 4 + 2]; }
+        return o;
+    }
+
+    internal static byte[] PngBgr(byte[] png)
+    {
+        using var bmp = new Bitmap(new MemoryStream(png));
+        return Bgr(Frame.FromBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height)), new Rectangle(0, 0, bmp.Width, bmp.Height));
+    }
+
+    /// <summary>Pixels in the kill digits' orange key colour (collect region "kill").</summary>
+    internal static int OrangeDigitPixels(byte[] bgr)
+    {
+        int n = 0;
+        for (int i = 0; i < bgr.Length; i += 3)
+            if (bgr[i + 2] >= 200 && bgr[i + 1] is >= 60 and <= 92 && bgr[i] is >= 5 and <= 25) n++;
+        return n;
+    }
+
+    [Fact]
+    public void Panel_disappearing_after_299_attaches_the_299_crop_not_the_empty_region()
+    {
+        var d = NewDetector();
+        var events = new List<WatchEvent>();
+        var t = new DateTime(2026, 11, 18, 20, 0, 0);
+        var f298 = Kill298.Load();
+        var f299 = Kill299.Load();
+        var noPanel = Dead1024.Load();
+        d.Process(f298, HudScale.One, t, events);
+        d.Process(f299, HudScale.One, t.AddSeconds(1), events);
+        d.Process(noPanel, HudScale.One, t.AddSeconds(2), events);
+        d.Process(noPanel, HudScale.One, t.AddSeconds(3), events);
+        var e = Assert.Single(events);
+
+        var region = new Rectangle(1024 - 180, 326, 180, 40);
+        byte[] crop299 = Bgr(f299, region), cropNow = Bgr(noPanel, region);
+        Assert.NotNull(e.Image);
+        Assert.Equal(299, e.Image!.Value);
+        Assert.Equal((180, 40), (e.Image.Width, e.Image.Height));
+        Assert.Equal(crop299, Bgr(e.Image.Pixels, 180 * 40));
+        Assert.Equal("ยิงมอนครบ 300 ตัวแล้ว (เลขล่าสุดที่เห็น 299)", e.Message);
+
+        // The PNG that goes to Discord is that 299 crop, pixel for pixel, with the orange digits on it.
+        var m = new AlertComposer(TestData.Config).Compose(e, noPanel, HudScale.One);
+        var sent = PngBgr(m.Png!);
+        Assert.Equal(crop299, sent);
+        Assert.NotEqual(cropNow, sent);
+        Assert.True(OrangeDigitPixels(sent) > 50, $"digits on the sent crop: {OrangeDigitPixels(sent)}");
+        Assert.True(OrangeDigitPixels(cropNow) < 5, $"the region at alert time has no panel: {OrangeDigitPixels(cropNow)}");
     }
 }

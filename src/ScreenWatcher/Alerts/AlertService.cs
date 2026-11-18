@@ -43,6 +43,8 @@ public sealed class AlertComposer
         string id = AlertIds.For(e);
         if (e.Kind == WatchEventKind.Death && frame is { Width: > 0 })
             return new AlertMessage(id, e.Message, PngEncoder.Encode(frame, new Rectangle(0, 0, frame.Width, frame.Height)), $"death_{e.Time:yyyyMMdd_HHmmss}.png", e.Time);
+        if (e.Kind == WatchEventKind.Hud && e.Image is { Width: > 0, Height: > 0 } kept)
+            return new AlertMessage(id, e.Message, PngEncoder.EncodeBgra(kept.Pixels, kept.Width, kept.Height), $"{id}_{e.Time:yyyyMMdd_HHmmss}.png", e.Time);
         if (e.Kind == WatchEventKind.Hud && frame is { Width: > 0 })
         {
             // Only the HUD part concerned, from the frame the alert fired on.

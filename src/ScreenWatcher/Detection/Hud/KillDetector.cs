@@ -31,6 +31,10 @@ public sealed class KillDetector : IHudDetector, IArmedState
     int? _confirmed;     // last confirmed value while the panel is (or was just) showing
     int _goneRun, _unreadableRun;
     bool _armed = true;
+    // Last crop of the kill region in which a number was read (buffer reused; copied when an alert fires).
+    byte[] _goodPx = [];
+    int _goodW, _goodH, _goodValue;
+    bool _haveGood;
 
     public KillDetector(WatcherConfig config, IReadOnlyDictionary<string, GlyphSet> glyphs, HudReadings readings)
     {
@@ -45,10 +49,31 @@ public sealed class KillDetector : IHudDetector, IArmedState
     public static KillObservation Observe(DigitReading r) =>
         !r.Ok ? KillObservation.Unreadable : r.Digits == 0 ? KillObservation.Gone : KillObservation.Of(r.Value);
 
+    /// <summary>Alert text: the configured message plus the last number seen on the panel.</summary>
+    public static string MessageWithLastSeen(string message, int lastSeen) => $"{message} (เลขล่าสุดที่เห็น {lastSeen})";
+
     public void Process(Frame frame, HudScale scale, DateTime now, List<WatchEvent> events)
     {
-        if (Update(Observe(_reader.Read(frame, scale))))
-            events.Add(new WatchEvent(WatchEventKind.Hud, _c.Message, now, AlertIds.Kill300, _crop.Locate(frame.Width, frame.Height, scale)));
+        var o = Observe(_reader.Read(frame, scale));
+        var rect = _crop.Locate(frame.Width, frame.Height, scale);
+        if (o.Value is { } v && !rect.IsEmpty) KeepGoodCrop(frame, rect, v);
+        if (!Update(o)) return;
+        // The panel is usually gone when the alert fires: send the last crop that showed the number.
+        var image = LastGoodCrop;
+        string text = image is null ? _c.Message : MessageWithLastSeen(_c.Message, image.Value);
+        events.Add(new WatchEvent(WatchEventKind.Hud, text, now, AlertIds.Kill300, rect, image));
+    }
+
+    /// <summary>The last kept crop in which the number was read (null when none).</summary>
+    public CropImage? LastGoodCrop =>
+        _haveGood ? new CropImage(_goodPx.AsSpan(0, _goodW * _goodH * 4).ToArray(), _goodW, _goodH, _goodValue) : null;
+
+    void KeepGoodCrop(Frame frame, System.Drawing.Rectangle rect, int value)
+    {
+        int n = rect.Width * rect.Height * 4;
+        if (_goodPx.Length < n) _goodPx = new byte[n];
+        frame.CopyRect(rect, _goodPx);
+        (_goodW, _goodH, _goodValue, _haveGood) = (rect.Width, rect.Height, value, true);
     }
 
     /// <summary>Logic only (tests): one poll. Returns true when the alert fires.</summary>
@@ -95,6 +120,7 @@ public sealed class KillDetector : IHudDetector, IArmedState
 
     public void Reset()
     {
+        _haveGood = false;
         _previous = _confirmed = null;
         _goneRun = _unreadableRun = 0;
         _readings.Set(AlertIds.Kill300, RowReading.None);

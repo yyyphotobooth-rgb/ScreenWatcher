@@ -190,7 +190,7 @@ public sealed class DiagnosticsHub : IDisposable
             IReadOnlyList<string> files = SaveEvidence && frame is { Width: > 0 } ? SaveAlertEvidence(e, frame, row) : [];
             if (queued is not null) _alertIds.AddOrUpdate(queued, id);
             Journal.Write("alert", ("id", id), ("row", row), ("kind", kind), ("value", value), ("threshold", _threshold(row)),
-                ("result", result), ("evidence", files));
+                ("crop_value", e.Image?.Value), ("result", result), ("evidence", files));
         }
         catch (Exception) { }
         return id;
@@ -208,7 +208,15 @@ public sealed class DiagnosticsHub : IDisposable
         string stem = $"{e.Time.ToString("HHmmss_fff", Inv)}_{row}";
         var images = new List<EvidenceImage> { FullImage(frame, stem + "_full.jpg") };
         var crop = Rectangle.Intersect(e.Crop, new Rectangle(0, 0, frame.Width, frame.Height));
-        if (e.Kind == WatchEventKind.Hud && crop.Width > 0 && crop.Height > 0)
+        if (e.Kind == WatchEventKind.Hud && e.Image is { Width: > 0, Height: > 0 } kept)
+        {
+            // The crop that was sent (e.g. the kill counter's last readable panel), not the region now.
+            int n = kept.Width * kept.Height * 4;
+            var px = ArrayPool<byte>.Shared.Rent(n);
+            Array.Copy(kept.Pixels, px, n);
+            images.Add(new EvidenceImage(stem + "_crop.png", px, kept.Width, kept.Height, Jpeg: false));
+        }
+        else if (e.Kind == WatchEventKind.Hud && crop.Width > 0 && crop.Height > 0)
         {
             var px = ArrayPool<byte>.Shared.Rent(crop.Width * crop.Height * 4);
             frame.CopyRect(crop, px);
