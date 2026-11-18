@@ -206,5 +206,42 @@
       "field": { "anchor": "topLeft", "cellX": [ 183, 196, 210, 223, 236 ], "y": 12, "glyphs": "ammo", "inks": [ "ammoBlue", "ammoRed" ],
                  "searchPx": 2, "minScore": 0.6, "minMargin": 0.03 }
     }
+  },
+
+  "fuel": {
+    // Orange arc on the gauge's outer ring, from the top (0 deg) clockwise to the pump icon
+    // (90.5 deg). Measured on collected gauge crops and samples (samples/README.md "Fuel arc"):
+    // - The arc is opaque and drawn in 13 segments of 7 deg. The LIT part is at the pump end and
+    //   the dark part at the top, i.e. it drains from the top towards the pump. The first three
+    //   lit segments are dimmer steps (R ~0x8C, ~0xA5, ~0xC5), then full orange (R 0xC0..0xF8).
+    //   Dark = (0x53..0x5B, 0x28..0x2C, 9), the same over sky, town and lava.
+    // - It only changes in whole segments: 141/300 and 157/300 look identical, 140/300 is one
+    //   segment less. So fuel is known to about +-3 %.
+    // - Lit segments vs the fuel text (never read by the app): 4 at 84; 7 at 129..140; 8 at
+    //   141..157; 10 at 179..191; 11 at 202, 204; 12 at 213; all 13 at 288..293 (of 300).
+    //   That fits n segments <=> fuel % in (6.0 + 5.83 (n-1), 6.0 + 5.83 n]. BELOW 84/300 THERE IS
+    //   NO SAMPLE: the ranges for 0..3 segments (0..6, 6..12, 12..18, 18..24 %) are extrapolated.
+    "message": "น้ำมันเหลือ ~{0}%",
+    "cropRegion": "gauge",
+    "stablePolls": 3,
+    "defaultThresholdPercent": 10,
+    // Re-arm when the estimate is this far above the threshold (one segment is ~6 %).
+    "rearmMarginPercent": 6,
+    "center": [ 82.0, 104.45 ],
+    // Ring band is r 66.3..74 (brighter towards its outer edge, so probes stay in the inner part);
+    // the fuel text overlaps it around 66..72 deg.
+    "radii": [ 68.5, 69.6, 70.7 ],
+    "segments": 13,
+    "segmentDeg": 7.0,
+    "pumpEndDeg": 90.5,
+    // The last ~3 deg at the pump are a bright cap; the first ~3.5 deg at the top blend into the cyan ring.
+    "pumpCapDeg": 3.0,
+    "topClearDeg": 3.6,
+    "probesPerSegment": 5,
+    "minVoteShare": 0.6,
+    "litMinR": 120, "litMaxB": 30, "hueMinGOverR": 0.36, "hueMaxGOverR": 0.60,
+    "darkR": [ 66, 112 ], "darkG": [ 30, 58 ], "darkMaxB": 24,
+    "percentAtNoSegments": 6.0,
+    "percentPerSegment": 5.83
   }
 }

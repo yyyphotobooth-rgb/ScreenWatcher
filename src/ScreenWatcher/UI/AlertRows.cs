@@ -22,7 +22,7 @@ public static class AlertRowCatalog
         new(AlertIds.GunAmmoEmpty, "กระสุนปืนกลหมด", Implemented: true),
         new(AlertIds.MissileEmpty, "มิสไซล์หมด", Implemented: true),
         new(AlertIds.AmmoBox, "กล่องเติมกระสุนเหลือ", Implemented: false, "กล่อง", 5),
-        new(AlertIds.FuelLow, "น้ำมันต่ำกว่า", Implemented: false, "%", 10, MaxThreshold: 100),
+        new(AlertIds.FuelLow, "น้ำมันต่ำกว่า", Implemented: true, "%", 10, MaxThreshold: 100),
         new(AlertIds.FuelBottles, "ขวดน้ำมันเหลือ", Implemented: false, "ขวด", 2),
         new(AlertIds.MonsterCard, "บัตรกันมอนเหลือ", Implemented: false, "ใบ", 3),
         new(AlertIds.HpPotions, "ยาเลือดเหลือ", Implemented: false, "ขวด", 5, SideChooser: true),

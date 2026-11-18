@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel)
 {
     public const string FileName = "detectors.json";
 
@@ -114,3 +114,17 @@ public sealed record DigitFieldConfig(
 public sealed record AmmoConfig(int StablePolls, string CropRegion, AmmoCounterConfig Gun, AmmoCounterConfig Missile);
 
 public sealed record AmmoCounterConfig(string Message, DigitFieldConfig Field);
+
+/// <summary>Fuel arc on the gauge's outer ring (Detection/Hud/FuelArc.cs). Angles are degrees
+/// clockwise from the top of the ring; Center and Radii are 1.0-layout continuous coordinates.
+/// The arc is Segments pieces of SegmentDeg, the first ending at PumpEndDeg. A probe is "lit"
+/// (orange, any of the brightness steps) or the arc's own "dark" brown; a segment needs
+/// MinVoteShare of its probes to agree. Lit segments n stand for a fuel % in
+/// (PercentAtNoSegments + (n-1) * PercentPerSegment, PercentAtNoSegments + n * PercentPerSegment].</summary>
+public sealed record FuelConfig(
+    string Message, string CropRegion, int StablePolls, int DefaultThresholdPercent, int RearmMarginPercent,
+    double[] Center, double[] Radii, int Segments, double SegmentDeg, double PumpEndDeg, double PumpCapDeg, double TopClearDeg,
+    int ProbesPerSegment, double MinVoteShare,
+    int LitMinR, int LitMaxB, double HueMinGOverR, double HueMaxGOverR,
+    int[] DarkR, int[] DarkG, int DarkMaxB,
+    double PercentAtNoSegments, double PercentPerSegment);
