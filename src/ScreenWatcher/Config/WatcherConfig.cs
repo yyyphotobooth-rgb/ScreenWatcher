@@ -24,8 +24,8 @@ public sealed record WindowConfig(string TitlePrefix, string[] ExcludeTitles);
 
 public sealed record DropConfig(int MissingChecksToFire, string Message);
 
-/// <summary>Discord alerts: which collect regions make up the death image, and how a failed send is retried.</summary>
-public sealed record AlertsConfig(string[] DeathCropRegions, double[] RetryDelaysSeconds, int QueueLimit)
+/// <summary>Discord alerts: how a failed send is retried.</summary>
+public sealed record AlertsConfig(double[] RetryDelaysSeconds, int QueueLimit)
 {
     public IReadOnlyList<TimeSpan> RetryDelays => RetryDelaysSeconds.Select(TimeSpan.FromSeconds).ToArray();
 }

@@ -21,9 +21,15 @@ Discord bot (Discord.Net, runs inside the app).
   captured frame. PrintWindow is not used (it made the game flash white).
 - `src/ScreenWatcher/Detection`: `IFrameDetector` (add new frame detectors here, e.g. ammo), death
   analyzer + detector, game-drop detector.
+- `src/ScreenWatcher/Detection/Hud`: HUD value readers and their alert logic (`IHudDetector`): ammo
+  counters, fuel arc, kill counter, item bar. Digit shapes for ammo/kill are in `glyphs.json`, item
+  icons in `icons.json` (both built from the labelled crops in `samples/labelled`); item counts are
+  Tahoma digits rendered at start-up (`CountFont.cs`). Readings measured so far and what is still
+  unverified: `samples/README.md`.
 - `src/ScreenWatcher/Collection`: optional "Collect data" mode (HUD crops + full frames saved to
   %LOCALAPPDATA%\ScreenWatcher\collect, size-capped; writes on a background thread).
-- `src/ScreenWatcher/Alerts`: event -> Thai text + HUD crop PNG, queued and sent with retries.
+- `src/ScreenWatcher/Alerts`: event -> Thai text + PNG (death: full client frame; HUD rows: crop of
+  that HUD part), queued and sent with retries.
 - `src/ScreenWatcher/Bot`: Discord bot (Guilds intent only, slash command /ss). Token DPAPI-encrypted
   (`Config/TokenStore.cs`); never log or commit it (`Logging/AppLog` scrubs it).
 - `src/ScreenWatcher/UI`: main window + settings page, built from `design/mockup-*.html`.
@@ -32,3 +38,5 @@ Discord bot (Discord.Net, runs inside the app).
 ## Commands
 - Tests: `dotnet test tests/ScreenWatcher.Tests`
 - Run: `dotnet run --project src/ScreenWatcher -c Release`
+- Check the readers live without Discord: add `-- --no-send` (never connects or sends; alerts and
+  row readings go to `%LOCALAPPDATA%\ScreenWatcher\log.txt`).

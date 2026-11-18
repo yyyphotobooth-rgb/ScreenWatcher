@@ -17,9 +17,8 @@
   },
 
   "alerts": {
-    // Discord alert sent on death: ONE image holding these collect regions (below) side by side,
-    // cut from the frame the death was seen on. Game dropped is text only.
-    "deathCropRegions": [ "gauge", "dialog" ],
+    // Death sends the whole game client frame it was seen on; the HUD rows send a crop of their
+    // own HUD part (each section's cropRegion); game dropped is text only.
     // A failed send is retried after each of these delays, then logged and dropped.
     "retryDelaysSeconds": [ 2, 5, 15, 30 ],
     // Alerts waiting to be sent; more are dropped (and logged).

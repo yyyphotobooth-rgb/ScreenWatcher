@@ -78,7 +78,7 @@ public sealed class DiscordAlertTests : IDisposable
     static Frame DeadFrameScaled() => TestData.DesktopClientFrame("from-chat/dead_1920x1440_missed.png", 34, 31, 1920, 1421);
 
     [Fact]
-    public void Death_alert_is_Thai_text_plus_one_image_of_gauge_and_dialog()
+    public void Death_alert_is_Thai_text_plus_the_full_client_frame()
     {
         var frame = DeadFrame();
         var composer = new AlertComposer(TestData.Config);
@@ -91,39 +91,27 @@ public sealed class DiscordAlertTests : IDisposable
         Assert.NotNull(m.Png);
         Assert.EndsWith(".png", m.FileName);
 
-        var rects = composer.DeathRects(frame.Width, frame.Height, HudScale.One);
-        Assert.Equal(2, rects.Count);
-        // gauge [0,24,192,164] top-left; dialog [-240,-110,480,220] from the centre (detectors.json).
-        Assert.Equal(new Rectangle(0, 24, 192, 164), rects[0]);
-        Assert.Equal(new Rectangle(512 - 240, 384 - 110, 480, 220), rects[1]);
-
+        // The whole client area of the triggering frame, pixel for pixel (no crops, no gap).
         using var img = new Bitmap(new MemoryStream(m.Png!));
-        Assert.Equal(192 + 8 + 480, img.Width);
-        Assert.Equal(220, img.Height);
-
-        // Pixels come from the event frame: the gauge on the left, the dialog after the gap.
-        AssertSamePixel(frame, rects[0].X + 82, rects[0].Y + 80, img, 82, 80);
-        AssertSamePixel(frame, rects[1].X + 240 - 169, rects[1].Y + 110 - 31, img, 192 + 8 + 240 - 169, 110 - 31);
-        AssertSamePixel(frame, rects[1].Right - 1, rects[1].Bottom - 1, img, img.Width - 1, img.Height - 1);
-        // Gap and the area below the shorter gauge crop are the theme background.
-        Assert.Equal(PngEncoder.ComposeBackground.ToArgb(), img.GetPixel(192 + 3, 10).ToArgb());
-        Assert.Equal(PngEncoder.ComposeBackground.ToArgb(), img.GetPixel(10, 200).ToArgb());
+        Assert.Equal(new Size(1024, 768), img.Size);
+        AssertSamePixel(frame, 0, 0, img, 0, 0);
+        AssertSamePixel(frame, 82, 104, img, 82, 104);              // gauge
+        AssertSamePixel(frame, 512 - 169, 384 - 31, img, 512 - 169, 384 - 31); // death dialog body
+        AssertSamePixel(frame, 700, 500, img, 700, 500);
+        AssertSamePixel(frame, 1023, 767, img, 1023, 767);
     }
 
     [Fact]
-    public void Death_alert_crops_follow_the_HUD_scale()
+    public void Death_alert_is_the_full_frame_at_any_client_size()
     {
         var frame = DeadFrameScaled();
         var composer = new AlertComposer(TestData.Config);
-        var scale = new HudScale(1.315, 1.318);
-        var m = composer.Compose(new WatchEvent(WatchEventKind.Death, "ตายแล้ว", DateTime.Now), frame, scale);
+        var m = composer.Compose(new WatchEvent(WatchEventKind.Death, "ตายแล้ว", DateTime.Now), frame, new HudScale(1.315, 1.318));
 
-        var rects = composer.DeathRects(frame.Width, frame.Height, scale);
-        Assert.Equal((int)Math.Round(192 * 1.315), rects[0].Width);
-        Assert.Equal((int)Math.Round(480 * 1.315), rects[1].Width);
         using var img = new Bitmap(new MemoryStream(m.Png!));
-        Assert.Equal(rects[0].Width + 8 + rects[1].Width, img.Width);
-        Assert.Equal(Math.Max(rects[0].Height, rects[1].Height), img.Height);
+        Assert.Equal(new Size(1920, 1421), img.Size);
+        AssertSamePixel(frame, 960, 710, img, 960, 710);
+        AssertSamePixel(frame, 1919, 1420, img, 1919, 1420);
     }
 
     [Fact]

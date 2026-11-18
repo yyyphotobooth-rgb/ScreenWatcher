@@ -31,6 +31,8 @@ public sealed class MainForm : Form
     readonly ToolTip _tip = new() { AutoPopDelay = 15000 };
     long _measuredBytes = -1;
     int _sizeTick;
+    readonly bool _noSend;
+    readonly Dictionary<string, string> _loggedRows = [];
 
     // Main page
     readonly Panel _mainPage = new() { Dock = DockStyle.Fill, BackColor = Theme.Background };
@@ -63,13 +65,14 @@ public sealed class MainForm : Form
     readonly DarkButton _openFolder = new() { Text = "เปิดโฟลเดอร์", SecondaryFill = Theme.Background };
     bool _suppressChannelEvent;
 
-    public MainForm(WatcherConfig config)
+    public MainForm(WatcherConfig config, bool noSend = false)
     {
         _config = config;
+        _noSend = noSend;
         _settings = AppSettings.Load(AppSettings.DefaultPath);
 
         AutoScaleMode = AutoScaleMode.None; // layout below is scaled by DeviceDpi by hand
-        Text = "ScreenWatcher";
+        Text = noSend ? "ScreenWatcher (ไม่ส่ง Discord)" : "ScreenWatcher";
         BackColor = Theme.Background;
         ForeColor = Theme.Text;
         Font = Theme.Body;
@@ -86,7 +89,7 @@ public sealed class MainForm : Form
             ChosenGuildId = _settings.DiscordGuildId,
             ChosenChannelId = _settings.DiscordChannelId,
         };
-        _alerts = new AlertService(new AlertComposer(config), _bot, _settings.IsAlertEnabled, _log,
+        _alerts = new AlertService(new AlertComposer(config), noSend ? new LogOnlySink(_log) : _bot, _settings.IsAlertEnabled, _log,
             config.Alerts.RetryDelays, config.Alerts.QueueLimit);
 
         BuildMainPage();
@@ -418,7 +421,8 @@ public sealed class MainForm : Form
         _uiTimer.Start();
         _watcher.Start();
 
-        if (_tokens.Load() is { } token)
+        if (_noSend) _log.Write("--no-send: Discord is not connected and nothing is sent");
+        else if (_tokens.Load() is { } token)
         {
             _log.AddSecret(token);
             await Task.Run(() => _bot.ConnectAsync(token));
@@ -486,6 +490,15 @@ public sealed class MainForm : Form
                     r.SetReached(now.Reached);
                     r.SetChooserVisible(now.TwoFound);
                     r.SetNow(now.Text);
+                    if (_noSend)
+                    {
+                        string line = now.Text + (now.Reached ? " (reached)" : "") + (now.TwoFound ? " (two)" : "");
+                        if (!_loggedRows.TryGetValue(r.Spec.Id, out var last) || last != line)
+                        {
+                            _loggedRows[r.Spec.Id] = line;
+                            _log.Write($"Row {r.Spec.Id}: {line}");
+                        }
+                    }
                     break;
             }
         }
@@ -549,6 +562,7 @@ public sealed class MainForm : Form
 
     async Task ConnectAsync()
     {
+        if (_noSend) { _botStatus.Text = "โหมด --no-send: ไม่เชื่อมต่อ Discord"; _botStatus.ForeColor = Theme.WarnText; return; }
         string token = _token.Box.Text.Trim();
         if (token.Length == 0)
         {

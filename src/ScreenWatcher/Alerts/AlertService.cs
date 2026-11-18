@@ -17,39 +17,32 @@ public interface IAlertSink
     Task SendAsync(AlertMessage message, CancellationToken ct);
 }
 
+/// <summary>Sink for the --no-send check mode: nothing leaves the PC, the alert is only logged.</summary>
+public sealed class LogOnlySink(AppLog log) : IAlertSink
+{
+    public Task SendAsync(AlertMessage message, CancellationToken ct)
+    {
+        log.Write($"NOT SENT (--no-send): [{message.AlertId}] {message.Text}" + (message.Png is null ? "" : $" + image {message.Png.Length / 1024} KB"));
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>
-/// Turns a detector event into an <see cref="AlertMessage"/>. Death: "ตายแล้ว" + ONE image that
-/// holds the gauge crop and the centre dialog crop side by side, cut from the frame the death was
-/// seen on (regions from detectors.json collect.regions, named in alerts.deathCropRegions).
-/// Game dropped: "เกมส์หลุด", text only (there is no window to crop).
+/// Turns a detector event into an <see cref="AlertMessage"/>. Death: "ตายแล้ว" + the whole game
+/// client frame the death was seen on. HUD rows (ammo, fuel, kill counter, items): the Thai text
+/// + a crop of only the HUD part concerned, from the frame that triggered it. Game dropped:
+/// "เกมส์หลุด", text only (there is no window to capture).
 /// </summary>
 public sealed class AlertComposer
 {
-    readonly CollectRegion[] _deathRegions;
-
-    public AlertComposer(WatcherConfig config)
-    {
-        _deathRegions = config.Alerts.DeathCropRegions
-            .Select(name => config.Collect.Regions.FirstOrDefault(r => r.Name == name)
-                ?? throw new InvalidDataException($"alerts.deathCropRegions: no collect region named '{name}'"))
-            .Select(r => new CollectRegion(r))
-            .ToArray();
-    }
-
-    /// <summary>Crop rectangles for a death alert at this client size and scale (empty ones dropped).</summary>
-    public IReadOnlyList<Rectangle> DeathRects(int width, int height, HudScale scale) =>
-        _deathRegions.Select(r => r.Locate(width, height, scale)).Where(r => !r.IsEmpty).ToList();
+    public AlertComposer(WatcherConfig config) { }
 
     /// <summary>Must run on the polling thread (the frame buffer is reused by the next poll).</summary>
     public AlertMessage Compose(WatchEvent e, Frame? frame, HudScale scale)
     {
         string id = AlertIds.For(e);
         if (e.Kind == WatchEventKind.Death && frame is { Width: > 0 })
-        {
-            var rects = DeathRects(frame.Width, frame.Height, scale);
-            if (rects.Count > 0)
-                return new AlertMessage(id, e.Message, PngEncoder.Compose(frame, rects), $"death_{e.Time:yyyyMMdd_HHmmss}.png", e.Time);
-        }
+            return new AlertMessage(id, e.Message, PngEncoder.Encode(frame, new Rectangle(0, 0, frame.Width, frame.Height)), $"death_{e.Time:yyyyMMdd_HHmmss}.png", e.Time);
         if (e.Kind == WatchEventKind.Hud && frame is { Width: > 0 })
         {
             // Only the HUD part concerned, from the frame the alert fired on.
