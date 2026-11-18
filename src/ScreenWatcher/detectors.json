@@ -243,5 +243,23 @@
     "darkR": [ 66, 112 ], "darkG": [ 30, 58 ], "darkMaxB": 24,
     "percentAtNoSegments": 6.0,
     "percentPerSegment": 5.83
+  },
+
+  "kill": {
+    // Orange italic digits, right-aligned in three cells of 19 px pitch ending ~W-75; digit rows
+    // y 334..348 at 1.0 (cell = 18x17 from y 333). Fewer digits leave the left cells empty.
+    // The panel (digits and wing emblem) is not always there: collected data shows it gone while
+    // the ship is stopped/landed ("UNIT STOPPED") with the map grid still visible, and it is
+    // absent in town. Seen only at HUD scale 1.0; at ~1.3 the position is assumed to scale about
+    // the top-right corner (no sample).
+    "message": "ยิงมอนครบ 300 ตัวแล้ว",
+    "cropRegion": "kill",
+    "stablePolls": 2,
+    "target": 300,
+    "nearTarget": 295,
+    "rearmBelow": 295,
+    "maxStepPerPoll": 12,
+    "field": { "anchor": "topRight", "cellX": [ -129, -110, -91 ], "y": 333, "glyphs": "kill", "inks": [ "kill" ],
+               "searchPx": 2, "minScore": 0.6, "minMargin": 0.03, "allowBlank": true, "blankInk": 6 }
   }
 }

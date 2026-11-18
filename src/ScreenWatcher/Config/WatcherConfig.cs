@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill)
 {
     public const string FileName = "detectors.json";
 
@@ -128,3 +128,11 @@ public sealed record FuelConfig(
     int LitMinR, int LitMaxB, double HueMinGOverR, double HueMaxGOverR,
     int[] DarkR, int[] DarkG, int DarkMaxB,
     double PercentAtNoSegments, double PercentPerSegment);
+
+/// <summary>Kill counter (orange number, right edge). The alert fires when the counter reads
+/// Target, or when the panel disappears while the last confirmed value was at least NearTarget.
+/// A value is confirmed when it equals the previous poll's reading or continues it upwards by at
+/// most MaxStepPerPoll (the counter can change every second in combat); "gone" needs StablePolls
+/// polls with no digits. Re-arms when a confirmed value is below RearmBelow.</summary>
+public sealed record KillConfig(
+    string Message, string CropRegion, int StablePolls, int Target, int NearTarget, int RearmBelow, int MaxStepPerPoll, DigitFieldConfig Field);

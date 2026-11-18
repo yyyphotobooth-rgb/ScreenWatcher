@@ -128,15 +128,16 @@ public class AmmoTests(ITestOutputHelper output)
         Assert.False(d.Update(1, 12));
         Assert.Equal(new RowReading("12", false), readings.Get(AlertIds.MissileEmpty));
 
-        Assert.False(d.Update(1, 0));               // first 0: not stable yet
-        Assert.Equal("12", readings.Get(AlertIds.MissileEmpty).Text);
+        Assert.False(d.Update(1, 0));               // first 0: shown live, but not stable yet
+        Assert.Equal(new RowReading("0", false), readings.Get(AlertIds.MissileEmpty));
         Assert.True(d.Update(1, 0));                // second 0: fires
         Assert.Equal(new RowReading("0", true), readings.Get(AlertIds.MissileEmpty));
         for (int i = 0; i < 10; i++) Assert.False(d.Update(1, 0)); // fires once
 
         Assert.False(d.Update(1, 300));             // reloaded
+        Assert.True(readings.Get(AlertIds.MissileEmpty).Reached);  // one reading does not clear it
         Assert.False(d.Update(1, 300));             // stable above 0: re-armed
-        Assert.False(readings.Get(AlertIds.MissileEmpty).Reached);
+        Assert.Equal(new RowReading("300", false), readings.Get(AlertIds.MissileEmpty));
         Assert.False(d.Update(1, 0));
         Assert.True(d.Update(1, 0));                // fires again
 

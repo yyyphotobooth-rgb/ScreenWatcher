@@ -64,6 +64,10 @@ public sealed class StableValue<T>(int polls) where T : struct, IEquatable<T>
     /// <summary>The last confirmed value; null while unknown.</summary>
     public T? Value { get; private set; }
 
+    /// <summary>The most recent readable reading, confirmed or not (what "ตอนนี้" shows: a counter
+    /// that changes every second is never equal twice in a row); null while unknown.</summary>
+    public T? Latest { get; private set; }
+
     /// <summary>Feeds one poll (null = unreadable). Returns true when <see cref="Value"/> was
     /// confirmed (again) by this poll.</summary>
     public bool Push(T? reading)
@@ -71,10 +75,11 @@ public sealed class StableValue<T>(int polls) where T : struct, IEquatable<T>
         if (reading is not { } v)
         {
             _run = 0;
-            if (++_unreadable >= UnknownAfter) Value = null;
+            if (++_unreadable >= UnknownAfter) Value = Latest = null;
             return false;
         }
         _unreadable = 0;
+        Latest = v;
         if (_run > 0 && v.Equals(_candidate)) _run++;
         else { _candidate = v; _run = 1; }
         if (_run < polls) return false;
@@ -86,7 +91,7 @@ public sealed class StableValue<T>(int polls) where T : struct, IEquatable<T>
     public void Reset()
     {
         _run = _unreadable = 0;
-        Value = null;
+        Value = Latest = null;
     }
 }
 

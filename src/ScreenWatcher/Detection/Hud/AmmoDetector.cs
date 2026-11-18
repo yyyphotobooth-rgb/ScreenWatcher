@@ -61,7 +61,8 @@ public sealed class AmmoDetector : IHudDetector
             if (c.Stable.Value > 0) c.Armed = true;
             else if (c.Armed) { c.Armed = false; fire = true; }
         }
-        if (c.Stable.Value is { } v) _readings.Set(c.Id, v.ToString(), v == 0);
+        // The row shows the live number; the orange "reached" style follows the confirmed state.
+        if (c.Stable.Latest is { } v) _readings.Set(c.Id, v.ToString(), c.Stable.Value == 0);
         else _readings.Set(c.Id, RowReading.Unknown);
         return fire;
     }

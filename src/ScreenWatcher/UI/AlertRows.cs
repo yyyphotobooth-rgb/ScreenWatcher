@@ -28,7 +28,7 @@ public static class AlertRowCatalog
         new(AlertIds.HpPotions, "ยาเลือดเหลือ", Implemented: false, "ขวด", 5, SideChooser: true),
         new(AlertIds.ShieldPotions, "ยาเกราะเหลือ", Implemented: false, "ขวด", 5, SideChooser: true),
         new(AlertIds.SpPotions, "ยา SP เหลือ", Implemented: false, "ขวด", 5, SideChooser: true),
-        new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: false),
+        new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: true),
     ];
 
     public static AlertRowSpec Get(string id) => All.First(r => r.Id == id);
