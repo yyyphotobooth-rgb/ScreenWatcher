@@ -5,8 +5,10 @@ using ScreenWatcher.Diagnostics;
 
 namespace ScreenWatcher.Collection;
 
-/// <summary>What the "อัตโนมัติ" rules look at on one poll (readings by alert row id).</summary>
-public readonly record struct AutoInputs(DateTime Now, HudScale Scale, bool HudPresent, Func<string, string> Reading, Func<string, int> Threshold);
+/// <summary>What the "อัตโนมัติ" rules look at on one poll (readings by alert row id).
+/// <c>Unreadable</c>: the "อ่านค่าไม่ได้" row's state (rule g's full frames); null = not watched.</summary>
+public readonly record struct AutoInputs(DateTime Now, HudScale Scale, bool HudPresent, Func<string, string> Reading, Func<string, int> Threshold,
+    UnreadableDetector? Unreadable = null);
 
 /// <summary>
 /// Collection mode "อัตโนมัติ": decides, per collect region and per poll, whether the region is
@@ -17,7 +19,8 @@ public readonly record struct AutoInputs(DateTime Now, HudScale Scale, bool HudP
 ///  kill_near (c) kill counter ≥ KillAtLeast · item_near (d) an item count ≤ threshold + ItemMargin ·
 ///  ammo_low (e) gun or missile below AmmoBelow · alert (f) any alert (HUD row: its region; death /
 ///  game dropped: all regions) · unknown (g) a row shows "?" longer than UnknownSeconds while the
-///  HUD is present · jump (h) a stable item / ammo count rises by more than ItemJump / AmmoJump, or
+///  HUD is present, or the row is over the "อ่านค่าไม่ได้" limit (that also saves the full client
+///  frame, see <see cref="DataCollector"/>) · jump (h) a stable item / ammo count rises by more than ItemJump / AmmoJump, or
 ///  the stable kill counter goes down.
 /// Runs on the polling thread; no allocation per poll.
 /// </summary>
@@ -143,6 +146,7 @@ public sealed class AutoCollectRules
                 if ((input.Now - row.UnknownSince.Value).TotalSeconds > _c.UnknownSeconds) Mark(row.Region, Unknown);
             }
             else row.UnknownSince = null;
+            if (input.Unreadable?.IsOverLimit(row.Id) == true) Mark(row.Region, Unknown);
 
             // h: implausible jump between stable reads.
             if (row.Kind == RowKind.Fuel || !int.TryParse(text, out int v)) { row.Run = 0; continue; }

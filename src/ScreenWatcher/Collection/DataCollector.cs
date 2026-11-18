@@ -39,12 +39,16 @@ public sealed class DataCollector : IDisposable
     readonly HudRing? _ring;
     readonly TimeSpan _pre;
     readonly int[] _autoIndex;
+    readonly TimeSpan _unreadableRepeat;
+    readonly List<(DateTime Due, string[] Rows)> _unreadableRepeats = [];
     volatile bool _disposed;
     long _pollTicks;
     int _polls;
 
-    public DataCollector(CollectConfig config, CollectStore store, AutoCollectRules? auto = null, HudRing? ring = null, double preSeconds = 0)
+    public DataCollector(CollectConfig config, CollectStore store, AutoCollectRules? auto = null, HudRing? ring = null, double preSeconds = 0,
+        double unreadableRepeatSeconds = 30)
     {
+        _unreadableRepeat = TimeSpan.FromSeconds(unreadableRepeatSeconds);
         _auto = auto;
         _ring = ring;
         _pre = TimeSpan.FromSeconds(preSeconds);
@@ -90,6 +94,7 @@ public sealed class DataCollector : IDisposable
         if (_disposed) return;
         long t0 = DateTime.UtcNow.Ticks;
         _auto?.Evaluate(inputs);
+        if (_auto is not null && inputs.Unreadable is { } unreadable) UnreadableFrames(frame, scale, now, unreadable);
         for (int i = 0; i < _regions.Length; i++)
         {
             var s = _regions[i];
@@ -140,9 +145,35 @@ public sealed class DataCollector : IDisposable
         QueueFull(frame, e.Time, SaveReason.Event, suffix, scale);
     }
 
-    bool QueueFull(Frame frame, DateTime now, SaveReason reason, string suffix, HudScale scale)
+    /// <summary>
+    /// Auto mode, rule g: when rows cross the "อ่านค่าไม่ได้" limit, the full client frame once then
+    /// and once more UnreadableFullFrameRepeatSeconds later if one of them is still unreadable (to
+    /// learn what covers the HUD). Allocates only when a row crosses.
+    /// </summary>
+    void UnreadableFrames(Frame frame, HudScale scale, DateTime now, UnreadableDetector u)
     {
-        bool ok = Queue(frame, new Rectangle(0, 0, frame.Width, frame.Height), now, "full", reason, suffix, scale);
+        if (u.CrossedThisPoll.Count > 0)
+        {
+            QueueFull(frame, now, SaveReason.Event, "_unreadable", scale, AutoCollectRules.Unknown);
+            _unreadableRepeats.Add((now + _unreadableRepeat, u.CrossedThisPoll.ToArray()));
+        }
+        for (int i = _unreadableRepeats.Count - 1; i >= 0; i--)
+        {
+            var (due, rows) = _unreadableRepeats[i];
+            if (now < due) continue;
+            _unreadableRepeats.RemoveAt(i);
+            foreach (var id in rows)
+                if (u.IsOverLimit(id))
+                {
+                    QueueFull(frame, now, SaveReason.Event, "_unreadable_later", scale, AutoCollectRules.Unknown);
+                    break;
+                }
+        }
+    }
+
+    bool QueueFull(Frame frame, DateTime now, SaveReason reason, string suffix, HudScale scale, string? rule = null)
+    {
+        bool ok = Queue(frame, new Rectangle(0, 0, frame.Width, frame.Height), now, "full", reason, suffix, scale, rule);
         if (ok) _fullSaves++;
         return ok;
     }

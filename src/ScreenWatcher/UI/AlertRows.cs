@@ -10,7 +10,7 @@ namespace ScreenWatcher.UI;
 /// show the ซ้าย/ขวา chooser (two icons of the same potion type on the item bar).
 /// </summary>
 public sealed record AlertRowSpec(string Id, string Label, bool Implemented, string? Unit = null, int? DefaultThreshold = null,
-    int MaxThreshold = 9999, bool SideChooser = false);
+    int MaxThreshold = 9999, bool SideChooser = false, int MinThreshold = 0);
 
 public static class AlertRowCatalog
 {
@@ -29,13 +29,15 @@ public static class AlertRowCatalog
         new(AlertIds.ShieldPotions, "ยาเกราะเหลือ", Implemented: true, "ขวด", 5, SideChooser: true),
         new(AlertIds.SpPotions, "ยา SP เหลือ", Implemented: true, "ขวด", 5, SideChooser: true),
         new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: true),
+        // "ตอนนี้": ปกติ, or the short names of the rows over the limit (detectors.json "unreadable").
+        new(AlertIds.Unreadable, "อ่านค่าไม่ได้เกิน", Implemented: true, "วินาที", 10, MaxThreshold: 3600, MinThreshold: 1),
     ];
 
     public static AlertRowSpec Get(string id) => All.First(r => r.Id == id);
 
     /// <summary>The threshold in use for a row: the saved one when valid, else the default.</summary>
     public static int Threshold(AppSettings settings, AlertRowSpec spec) =>
-        settings.Thresholds.TryGetValue(spec.Id, out int v) && v >= 0 && v <= spec.MaxThreshold ? v : spec.DefaultThreshold ?? 0;
+        settings.Thresholds.TryGetValue(spec.Id, out int v) && v >= spec.MinThreshold && v <= spec.MaxThreshold ? v : spec.DefaultThreshold ?? 0;
 }
 
 /// <summary>Table row: checkbox · label (· ซ้าย/ขวา chooser) · optional threshold box + unit · "ตอนนี้" value.</summary>
@@ -146,7 +148,7 @@ sealed class AlertRow : Control
 
     void OnThresholdText()
     {
-        if (!int.TryParse(_threshold!.Box.Text, out int v) || v < 0 || v > Spec.MaxThreshold || v == _thresholdValue) return;
+        if (!int.TryParse(_threshold!.Box.Text, out int v) || v < Spec.MinThreshold || v > Spec.MaxThreshold || v == _thresholdValue) return;
         _thresholdValue = v;
         ThresholdChanged?.Invoke(this, v);
     }
@@ -165,6 +167,16 @@ sealed class AlertRow : Control
         if (!Spec.Implemented) return;
         if (_now.Text != text) _now.Text = text;
         _now.ForeColor = colour ?? (_reachedOn ? Theme.WarnValue : Theme.Text);
+    }
+
+    /// <summary>"ตอนนี้" for a comma-separated list of names: all of them when they fit the column,
+    /// else the first one and "+N" for the rest.</summary>
+    public void SetNowList(string text, Color? colour = null)
+    {
+        var names = text.Split(", ");
+        if (names.Length > 1 && TextRenderer.MeasureText(text, _now.Font).Width > _now.Width)
+            text = $"{names[0]} +{names.Length - 1}";
+        SetNow(text, colour);
     }
 
     /// <summary>The mockup's orange "threshold reached" style.</summary>

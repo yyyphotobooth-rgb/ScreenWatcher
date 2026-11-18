@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable)
 {
     public const string FileName = "detectors.json";
 
@@ -171,4 +171,9 @@ public sealed record DiagnosticsConfig(
 public sealed record AutoCollectConfig(
     double PreSeconds, double PostSeconds,
     double FuelBelowPercent, double ScaleAtLeast, int KillAtLeast, int ItemMargin, int AmmoBelow,
-    double UnknownSeconds, int ItemJump, int AmmoJump, int JumpStablePolls);
+    double UnknownSeconds, int ItemJump, int AmmoJump, int JumpStablePolls, double UnreadableFullFrameRepeatSeconds);
+
+/// <summary>Row "อ่านค่าไม่ได้เกิน N วินาที" (Detection/Hud/UnreadableDetector.cs): default N, how long
+/// after the first row other rows may join the same message, the message ({0} = short names) and
+/// the watched rows in table order as [alert row id, short name].</summary>
+public sealed record UnreadableConfig(int DefaultSeconds, double CombineSeconds, string Message, string[][] Rows);

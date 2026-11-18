@@ -191,10 +191,17 @@ public sealed class DiagnosticsHub : IDisposable
             if (queued is not null) _alertIds.AddOrUpdate(queued, id);
             Journal.Write("alert", ("id", id), ("row", row), ("kind", kind), ("value", value), ("threshold", _threshold(row)),
                 ("crop_value", e.Image?.Value), ("result", result), ("evidence", files));
+            if (e.Unreadable is { } rows)
+                Journal.Write("unreadable", ("event", "occurred"), ("alert_id", id), ("rows", rows.Select(r => r.Id).ToArray()),
+                    ("seconds", rows.Select(r => r.Seconds).ToArray()), ("limit", _threshold(row)), ("result", result));
         }
         catch (Exception) { }
         return id;
     }
+
+    /// <summary>Polling thread: a row reported by the "อ่านค่าไม่ได้" alert shows a value again.</summary>
+    public void OnUnreadableRecovered(UnreadableRow r) =>
+        Journal.Write("unreadable", ("event", "recovered"), ("rows", new[] { r.Id }), ("seconds", new[] { r.Seconds }), ("value", SafeReading(r.Id)));
 
     /// <summary>Worker thread: an alert was sent (true) or given up on (false).</summary>
     public void OnAlertCompleted(AlertMessage m, bool ok)
@@ -216,7 +223,7 @@ public sealed class DiagnosticsHub : IDisposable
             Array.Copy(kept.Pixels, px, n);
             images.Add(new EvidenceImage(stem + "_crop.png", px, kept.Width, kept.Height, Jpeg: false));
         }
-        else if (e.Kind == WatchEventKind.Hud && crop.Width > 0 && crop.Height > 0)
+        else if (e.Kind == WatchEventKind.Hud && crop.Width > 0 && crop.Height > 0 && crop != new Rectangle(0, 0, frame.Width, frame.Height))
         {
             var px = ArrayPool<byte>.Shared.Rent(crop.Width * crop.Height * 4);
             frame.CopyRect(crop, px);

@@ -126,6 +126,7 @@ public sealed class MainForm : Form
         _watcher.EventRaised += OnWatchEvent;
         _watcher.Polled += _diag.OnPolled;
         _watcher.Rearmed += _diag.OnRearmed;
+        _watcher.UnreadableRecovered += _diag.OnUnreadableRecovered;
         _bot.StatusChanged += s => { _diag.OnDiscordStatus(s.State.ToString(), s.Reason); OnUi(() => { UpdateDiscordTile(); UpdateBotStatus(); RefreshChannels(); }); };
         _bot.Problem += _diag.OnDiscordProblem;
         _bot.ChannelsChanged += () => OnUi(RefreshChannels);
@@ -203,9 +204,11 @@ public sealed class MainForm : Form
             if (spec.Implemented)
             {
                 row.AlertEnabled = _settings.IsAlertEnabled(spec.Id);
+                _watcher.Options.SetEnabled(spec.Id, row.AlertEnabled);
                 row.AlertToggled += (r, on) =>
                 {
                     _settings.SetAlertEnabled(r.Spec.Id, on);
+                    _watcher.Options.SetEnabled(r.Spec.Id, on);
                     SaveSettings();
                     _log.Write($"Alert {r.Spec.Id}: {(on ? "on" : "off")}");
                     _diag.OnSetting($"alert.{r.Spec.Id}.enabled", on);
@@ -557,7 +560,8 @@ public sealed class MainForm : Form
                     var now = _watcher.Readings.Get(r.Spec.Id);
                     r.SetReached(now.Reached);
                     r.SetChooserVisible(now.TwoFound);
-                    r.SetNow(now.Text);
+                    if (r.Spec.Id == AlertIds.Unreadable) r.SetNowList(now.Text, now.Text is "ปกติ" or "—" ? null : Theme.WarnValue);
+                    else r.SetNow(now.Text);
                     if (_noSend)
                     {
                         string line = now.Text + (now.Reached ? " (reached)" : "") + (now.TwoFound ? " (two)" : "");
@@ -828,7 +832,8 @@ public sealed class MainForm : Form
             if (mode == CollectMode.Auto)
             {
                 var rules = new AutoCollectRules(_config, c.Regions.Select(r => r.Name).ToArray());
-                next = new DataCollector(c, store, rules, _watcher.Ring, _config.Diagnostics.Auto.PreSeconds);
+                next = new DataCollector(c, store, rules, _watcher.Ring, _config.Diagnostics.Auto.PreSeconds,
+                    _config.Diagnostics.Auto.UnreadableFullFrameRepeatSeconds);
                 next.AutoChanged += _diag.OnAutoCollect;
             }
             else next = new DataCollector(c, store);

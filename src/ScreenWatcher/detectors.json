@@ -320,6 +320,24 @@
     ]
   },
 
+  "unreadable": {
+    // Row "อ่านค่าไม่ได้เกิน N วินาที" (Detection/Hud/UnreadableDetector.cs). A HUD row counts as
+    // unreadable when it showed a value earlier in this game session and now shows "?" for longer
+    // than N seconds while frames arrive (item rows: also when the whole item bar is not seen).
+    "defaultSeconds": 10,
+    // Rows crossing the limit within this many seconds of the first one share one message.
+    "combineSeconds": 3,
+    // {0} = the short names below, comma separated. Sent with the full client frame.
+    "message": "อ่านค่าไม่ได้: {0} (อาจมีหน้าต่างบังอยู่)",
+    // Watched rows in table order: [alert row id, short name].
+    "rows": [
+      [ "gunAmmoEmpty", "ปืนกล" ], [ "missileEmpty", "มิสไซล์" ], [ "ammoBox", "กล่องกระสุน" ],
+      [ "fuelLow", "น้ำมัน" ], [ "fuelBottles", "ขวดน้ำมัน" ], [ "monsterCard", "บัตรกันมอน" ],
+      [ "hpPotions", "ยาเลือด" ], [ "shieldPotions", "ยาเกราะ" ], [ "spPotions", "ยา SP" ],
+      [ "kill300", "นับมอน" ]
+    ]
+  },
+
   "diagnostics": {
     // Field-trial diagnostics (Diagnostics/). Everything stays in %LOCALAPPDATA%\ScreenWatcher.
     // journal\yyyy-MM-dd.jsonl: one JSON record per line, always on; oldest day files go first.
@@ -346,7 +364,11 @@
       "itemJump": 50,                // h. a stable item count rises by more than this,
       "ammoJump": 1000,              //    a stable ammo count rises by more than this,
                                      //    or the stable kill counter goes down
-      "jumpStablePolls": 2           //    "stable" = the same reading on this many polls in a row
+      "jumpStablePolls": 2,          //    "stable" = the same reading on this many polls in a row
+                                     // g. also: when a row crosses the "อ่านค่าไม่ได้" limit, the
+                                     //    full client frame once then, and once more this many
+                                     //    seconds later if the row is still unreadable
+      "unreadableFullFrameRepeatSeconds": 30
     }
   }
 }

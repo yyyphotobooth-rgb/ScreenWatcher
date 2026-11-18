@@ -48,6 +48,12 @@ public sealed class HudOptions
 {
     readonly ConcurrentDictionary<string, int> _thresholds = new(StringComparer.OrdinalIgnoreCase);
     readonly ConcurrentDictionary<string, bool> _right = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, bool> _enabled = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The row's alert switch (default on). Only the "อ่านค่าไม่ได้" row reads it: a row the
+    /// user switched off is not watched for being unreadable.</summary>
+    public void SetEnabled(string id, bool on) => _enabled[id] = on;
+    public bool IsEnabled(string id) => !_enabled.TryGetValue(id, out bool on) || on;
 
     public void SetThreshold(string id, int value) => _thresholds[id] = value;
     public int Threshold(string id, int fallback) => _thresholds.TryGetValue(id, out int v) ? v : fallback;

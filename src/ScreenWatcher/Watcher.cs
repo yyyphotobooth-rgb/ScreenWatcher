@@ -37,6 +37,7 @@ public sealed class Watcher : IDisposable
     readonly HudScaleTracker _scale;
     readonly IReadOnlyList<IFrameDetector> _frameDetectors;
     readonly IReadOnlyList<IHudDetector> _hudDetectors;
+    readonly UnreadableDetector _unreadable;
     readonly List<WatchEvent> _hudEvents = [];
     readonly IArmedState[] _armables;
     readonly Dictionary<string, bool> _armed = new(StringComparer.Ordinal), _armedBefore = new(StringComparer.Ordinal);
@@ -71,13 +72,16 @@ public sealed class Watcher : IDisposable
         _scale = new HudScaleTracker(config.HudScale);
         _frameDetectors = [_death];
         var glyphs = GlyphSet.LoadAll(Path.Combine(AppContext.BaseDirectory, GlyphSet.FileName));
+        var items = new ItemDetector(config, IconSet.Load(Path.Combine(AppContext.BaseDirectory, IconSet.FileName)), Readings, Options);
         _hudDetectors = [new AmmoDetector(config, glyphs, Readings), new FuelDetector(config, Readings, Options),
-            new KillDetector(config, glyphs, Readings),
-            new ItemDetector(config, IconSet.Load(Path.Combine(AppContext.BaseDirectory, IconSet.FileName)), Readings, Options)];
+            new KillDetector(config, glyphs, Readings), items];
+        _unreadable = new UnreadableDetector(config, Readings, Options, () => items.BarHiddenPolls);
+        _unreadable.Recovered += r => { try { UnreadableRecovered?.Invoke(r); } catch (Exception) { } };
         _armables = [.. _hudDetectors.OfType<IArmedState>()];
         Ring = new HudRing(config.Collect.Regions.Select(r => new CollectRegion(r)),
             Math.Max(1, (int)Math.Ceiling(config.Diagnostics.RingSeconds * 1000.0 / Math.Max(1, config.PollIntervalMs))));
         _defaultThresholds[AlertIds.FuelLow] = config.Fuel.DefaultThresholdPercent;
+        _defaultThresholds[AlertIds.Unreadable] = config.Unreadable.DefaultSeconds;
         foreach (var item in config.Items.Items) _defaultThresholds[item.Id] = item.DefaultThreshold;
         _readingText = id => Readings.Get(id).Text;
         _threshold = id => Options.Threshold(id, _defaultThresholds.GetValueOrDefault(id));
@@ -94,6 +98,10 @@ public sealed class Watcher : IDisposable
     /// <summary>Raised on the polling thread when an alert re-arms (fired earlier, now ready to fire
     /// again). Key = alert row id, or "id:gone" for an item row's "หมด" alert.</summary>
     public event Action<string>? Rearmed;
+
+    /// <summary>Raised on the polling thread when a row reported by the "อ่านค่าไม่ได้" alert shows
+    /// a value again.</summary>
+    public event Action<UnreadableRow>? UnreadableRecovered;
 
     /// <summary>The threshold a row uses now (user's value or the row's default).</summary>
     public int ThresholdOf(string alertId) => _threshold(alertId);
@@ -145,7 +153,7 @@ public sealed class Watcher : IDisposable
             IntPtr hwnd = _finder.Find();
             Raise(_drop.Update(hwnd != IntPtr.Zero, now));
 
-            if (hwnd == IntPtr.Zero) { NoFrame(new(GameState.NotFound)); return; }
+            if (hwnd == IntPtr.Zero) { _unreadable.EndSession(); NoFrame(new(GameState.NotFound)); return; }
 
             switch (_capture.Capture(hwnd, _frame))
             {
@@ -160,9 +168,10 @@ public sealed class Watcher : IDisposable
             foreach (var d in _frameDetectors) Raise(d.Process(_frame, scale, now));
             _hudEvents.Clear();
             foreach (var d in _hudDetectors) d.Process(_frame, scale, now, _hudEvents);
+            _unreadable.Process(now, _frame.Width, _frame.Height, _hudEvents);
             foreach (var e in _hudEvents) Raise(e);
             Ring.Push(_frame, scale, now);
-            _collector?.OnFrame(_frame, scale, now, new AutoInputs(now, scale, _scale.Current, _readingText, _threshold));
+            _collector?.OnFrame(_frame, scale, now, new AutoInputs(now, scale, _scale.Current, _readingText, _threshold, _unreadable));
             CheckRearmed();
             Polled?.Invoke(now);
         }
@@ -261,6 +270,7 @@ public sealed class Watcher : IDisposable
     void ResetHud()
     {
         foreach (var d in _hudDetectors) d.Reset();
+        _unreadable.Interrupt();
     }
 
     void SetStatus(GameStatus s)

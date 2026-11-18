@@ -50,6 +50,10 @@ public sealed class ItemDetector : IHudDetector, IArmedState
 
     public ItemBarReader Reader => _reader;
 
+    /// <summary>Polls in a row on which the item bar was not seen (0 = seen on the last poll).
+    /// Read-only view for the "อ่านค่าไม่ได้" row.</summary>
+    public int BarHiddenPolls => _states.Length == 0 ? 0 : _states[0].HiddenRun;
+
     public void Process(Frame frame, HudScale scale, DateTime now, List<WatchEvent> events)
     {
         _reader.Read(frame, scale, _reading);

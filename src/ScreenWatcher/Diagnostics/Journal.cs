@@ -46,7 +46,7 @@ public sealed partial class Journal
 
     public static string FileNameFor(DateTimeOffset t) => t.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + Extension;
 
-    /// <summary>Writes one record. Field values: string, bool, numbers, null, string[] / IEnumerable&lt;string&gt;,
+    /// <summary>Writes one record. Field values: string, bool, numbers, null, string[] / IEnumerable&lt;string&gt;, double[],
     /// or IReadOnlyDictionary&lt;string, string&gt; (written as a nested object).</summary>
     public void Write(string type, params (string Key, object? Value)[] fields)
     {
@@ -105,6 +105,11 @@ public sealed partial class Journal
                 w.WriteStartObject(key);
                 foreach (var (k, v) in map) w.WriteString(k, v);
                 w.WriteEndObject();
+                break;
+            case IEnumerable<double> numbers:
+                w.WriteStartArray(key);
+                foreach (var v in numbers) w.WriteNumberValue(Math.Round(v, 4));
+                w.WriteEndArray();
                 break;
             case IEnumerable<string> list:
                 w.WriteStartArray(key);

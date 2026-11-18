@@ -7,9 +7,15 @@ public enum WatchEventKind { Death, GameDropped, Hud }
 /// <summary>An event to alert about. <c>Hud</c> events (ammo, fuel, kill counter, items) carry the
 /// alert row id they belong to and the frame rectangle of the HUD part concerned. <c>Image</c>,
 /// when set, is the crop to send instead of cutting <c>Crop</c> out of the current frame (kill
-/// counter: the last crop in which the number was read, because the panel is gone by then).</summary>
+/// counter: the last crop in which the number was read, because the panel is gone by then).
+/// <c>Unreadable</c> is set on the "อ่านค่าไม่ได้" alert only: the rows it names (Crop is then the
+/// whole client area).</summary>
 public sealed record WatchEvent(WatchEventKind Kind, string Message, DateTime Time, string? AlertId = null, Rectangle Crop = default,
-    CropImage? Image = null);
+    CropImage? Image = null, IReadOnlyList<UnreadableRow>? Unreadable = null);
+
+/// <summary>A HUD row in the "อ่านค่าไม่ได้" alert or its recovery: alert row id, short name and
+/// how long it has shown "?" (seconds).</summary>
+public sealed record UnreadableRow(string Id, string Name, double Seconds);
 
 /// <summary>A kept HUD crop: tightly packed BGRA (owned, never reused) and the value read on it.</summary>
 public sealed record CropImage(byte[] Pixels, int Width, int Height, int Value);
