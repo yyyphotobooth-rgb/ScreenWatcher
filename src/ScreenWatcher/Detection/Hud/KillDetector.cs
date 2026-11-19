@@ -52,9 +52,12 @@ public sealed class KillDetector : IHudDetector, IArmedState
     /// <summary>Alert text: the configured message plus the last number seen on the panel.</summary>
     public static string MessageWithLastSeen(string message, int lastSeen) => $"{message} (เลขล่าสุดที่เห็น {lastSeen})";
 
+    /// <summary>Polling thread: the last poll's observation (EXP test kill sum).</summary>
+    public KillObservation LastObservation { get; private set; } = KillObservation.Unreadable;
+
     public void Process(Frame frame, HudScale scale, DateTime now, List<WatchEvent> events)
     {
-        var o = Observe(_reader.Read(frame, scale));
+        var o = LastObservation = Observe(_reader.Read(frame, scale));
         var rect = _crop.Locate(frame.Width, frame.Height, scale);
         if (o.Value is { } v && !rect.IsEmpty) KeepGoodCrop(frame, rect, v);
         if (!Update(o)) return;
@@ -120,6 +123,7 @@ public sealed class KillDetector : IHudDetector, IArmedState
 
     public void Reset()
     {
+        LastObservation = KillObservation.Unreadable;
         _haveGood = false;
         _previous = _confirmed = null;
         _goneRun = _unreadableRun = 0;

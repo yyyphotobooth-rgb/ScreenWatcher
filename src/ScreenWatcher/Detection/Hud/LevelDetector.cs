@@ -4,6 +4,16 @@ using ScreenWatcher.Imaging;
 
 namespace ScreenWatcher.Detection.Hud;
 
+/// <summary>One read of the level line. PctHundredths: the percentage in hundredths (8669 = 86.69 %),
+/// null when it could not be read exactly.</summary>
+public readonly record struct LevelLine(int Level, int? PctHundredths)
+{
+    public static string FormatPct(int hundredths) =>
+        (hundredths < 0 ? "-" : "") + $"{Math.Abs(hundredths) / 100}.{Math.Abs(hundredths) % 100:D2}";
+    public string PctText => PctHundredths is { } p ? FormatPct(p) : "?";
+    public override string ToString() => $"Lv.{Level} {PctText}%";
+}
+
 /// <summary>
 /// Reads the level from the line "Lv.88 50.61%" at the bottom centre of the client (on the exp
 /// bar, under the item bar), light grey (222,222,222) with a black outline.
@@ -27,6 +37,8 @@ public sealed class LevelReader
 
     readonly CountFont _font;
     readonly Dictionary<string, int> _lKeys = new();
+    readonly HashSet<string> _pctKeys = new();
+    readonly int[] _lWidths, _splitWidths;
     char[] _key = [];
 
     public LevelReader(LevelConfig config)
@@ -34,7 +46,14 @@ public sealed class LevelReader
         _c = config;
         _font = CountFont.Render(config.FontFace, config.FontMinHeight, config.FontMaxHeight);
         for (int h = config.FontMinHeight; h <= config.FontMaxHeight; h++)
+        {
             if (CountFont.Glyph(config.FontFace, h, 'L') is { } l) _lKeys.TryAdd(l, h);
+            if (CountFont.Glyph(config.FontFace, h, '%') is { } p) _pctKeys.Add(p);
+        }
+        static int Width(string key) => key.IndexOf('/') < 0 ? key.Length : key.IndexOf('/');
+        _lWidths = [.. _lKeys.Keys.Select(Width).Distinct()];
+        // Piece widths tried when touching glyphs are split: the dot, every digit, the "%".
+        _splitWidths = [.. new[] { 1 }.Concat(_font.Digits.Keys.Select(Width)).Concat(_pctKeys.Select(Width)).Distinct().Order()];
         if (config.Prefix.Length != GlyphH) throw new InvalidDataException("level: prefix must have 7 rows");
         _prefixW = config.Prefix[0].Length;
         _prefix = Parse(config.Prefix, _prefixW);
@@ -82,11 +101,20 @@ public sealed class LevelReader
     double _failScore, _failNext;
     int _failK, _failD;
 
-    public int? Read(Frame f, HudScale scale)
+    public int? Read(Frame f, HudScale scale) => ReadLine(f, scale)?.Level;
+
+    /// <summary>The level (exactly as <see cref="Read"/> reads it: Tahoma, then the 4x7 cells) and the
+    /// percentage from a separate exact Tahoma pass (<see cref="ReadPercent(Frame, HudScale, int)"/>);
+    /// null when the level itself cannot be read.</summary>
+    public LevelLine? ReadLine(Frame f, HudScale scale)
     {
         _fail = null;
-        if (ReadTahoma(f, scale) is { } level) return level;
-        return ReadCells(f, scale);
+        int? level = ReadTahoma(f, scale) ?? ReadCells(f, scale);
+        if (level is not { } l) return null;
+        string? fail = _fail;
+        var line = new LevelLine(l, ReadPercent(f, scale, l));
+        _fail = fail;
+        return line;
     }
 
     /// <summary>Ink mask of the area into _ink; returns its size (0 when empty).</summary>
@@ -169,6 +197,128 @@ public sealed class LevelReader
             prevEnd = s1;
         }
         return digits == 0 ? null : value;
+    }
+
+    /// <summary>Rows with ink in columns c0..c1 (false when none).</summary>
+    bool Rows(int aw, int ah, int c0, int c1, out int top, out int bottom)
+    {
+        top = bottom = -1;
+        for (int y = 0; y < ah; y++)
+            for (int c = c0; c <= c1; c++)
+                if (_ink[y * aw + c]) { if (top < 0) top = y; bottom = y; break; }
+        return top >= 0;
+    }
+
+    /// <summary>
+    /// Percentage pass, separate from the level read so the level row is unaffected. Same Tahoma
+    /// segmentation, but glyphs may touch (Tahoma 10: the L's foot touches the v, a "4" touches
+    /// its neighbours, a digit may touch the "%"): a run of ink columns that is not one glyph is
+    /// split into pieces that are each exactly a Tahoma glyph. After "Lv." the digits must equal
+    /// <paramref name="level"/>, then after a space exactly "N.NN%" / "NN.NN%" / "100.00%".
+    /// Hundredths of a percent, or null when anything is missing or not exact.
+    /// </summary>
+    public int? ReadPercent(Frame f, HudScale scale, int level)
+    {
+        var area = Area(f.Width, f.Height, scale);
+        var (aw, ah) = Mask(f, area);
+        if (aw == 0) return null;
+        var lLookup = _lKeys.GetAlternateLookup<ReadOnlySpan<char>>();
+        int x = 0, top = -1, bottom = -1;
+        bool glued = false;
+        while (top < 0 && NextSegment(aw, ah, ref x, out int s0, out int s1, out int t0, out int t1))
+        {
+            if (lLookup.ContainsKey(Key(aw, s0, s1, t0, t1))) { top = t0; bottom = t1; break; }
+            foreach (int w in _lWidths)
+                if (s1 - s0 + 1 > w && Rows(aw, ah, s0, s0 + w - 1, out int u0, out int u1) && lLookup.ContainsKey(Key(aw, s0, s0 + w - 1, u0, u1)))
+                { top = u0; bottom = u1; glued = true; break; }
+        }
+        if (top < 0) return null;
+        // "v" then "." (or only "." when the v was glued to the L).
+        bool dot = false;
+        int prevEnd = -1;
+        for (int k = 0; k < (glued ? 1 : 2) && !dot; k++)
+        {
+            if (!NextSegment(aw, ah, ref x, out int s0, out int s1, out int t0, out int t1)) return null;
+            dot = s1 == s0 && t1 == bottom && t0 > top;
+            prevEnd = s1;
+        }
+        if (!dot) return null;
+        // The rest of the line as glyph tokens, each with the blank columns before it.
+        _tokens.Clear();
+        while (_tokens.Count < 16 && NextSegment(aw, ah, ref x, out int s0, out int s1, out _, out _))
+        {
+            int first = _tokens.Count;
+            if (!Tokenize(aw, ah, s0, s1, top, bottom)) break;   // not text of this line: the line ends here
+            _tokens[first] = _tokens[first] with { Gap = s0 - prevEnd - 1 };
+            prevEnd = s1;
+        }
+        int i = 0, n = _tokens.Count, gap = _c.MaxDigitGap;
+        bool Next(out char c, out int g)
+        {
+            (c, g) = i < n ? (_tokens[i].C, _tokens[i].Gap) : ('\0', 0);
+            i++;
+            return c != '\0';
+        }
+        // Level digits.
+        int lv = 0, digits = 0;
+        while (i < n && char.IsAsciiDigit(_tokens[i].C) && _tokens[i].Gap <= gap && digits < _c.MaxDigits)
+        {
+            lv = lv * 10 + (_tokens[i].C - '0');
+            digits++;
+            i++;
+        }
+        if (digits == 0 || lv != level) return null;
+        // Whole percent: 1..3 digits, the first after a space.
+        gap = _c.PctMaxGap;   // inside the percentage ("1" has a wide left bearing at 11 px)
+        int whole = 0, wn = 0;
+        while (i < n && char.IsAsciiDigit(_tokens[i].C) && (wn == 0 ? _tokens[i].Gap > gap : _tokens[i].Gap <= gap) && wn < 3)
+        {
+            whole = whole * 10 + (_tokens[i].C - '0');
+            wn++;
+            i++;
+        }
+        if (wn == 0) return null;
+        if (!Next(out char c, out int g) || c != '.' || g > gap) return null;
+        int frac = 0;
+        for (int k = 0; k < 2; k++)
+        {
+            if (!Next(out c, out g) || !char.IsAsciiDigit(c) || g > gap) return null;
+            frac = frac * 10 + (c - '0');
+        }
+        if (!Next(out c, out g) || c != '%' || g > gap) return null;
+        int value = whole * 100 + frac;
+        return value <= 10000 ? value : null;
+    }
+
+    readonly record struct Token(char C, int X0, int X1, int Gap);
+    readonly List<Token> _tokens = new(16);
+
+    /// <summary>Columns c0..c1 (touching ink) as glyphs appended to _tokens; false (nothing added)
+    /// when they cannot be split into exact glyphs.</summary>
+    bool Tokenize(int aw, int ah, int c0, int c1, int top, int bottom)
+    {
+        if (GlyphAt(aw, ah, c0, c1, top, bottom) is { } whole) { _tokens.Add(new Token(whole, c0, c1, 0)); return true; }
+        foreach (int w in _splitWidths)
+        {
+            if (w >= c1 - c0 + 1 || GlyphAt(aw, ah, c0, c0 + w - 1, top, bottom) is not { } g) continue;
+            int count = _tokens.Count;
+            _tokens.Add(new Token(g, c0, c0 + w - 1, 0));
+            if (Tokenize(aw, ah, c0 + w, c1, top, bottom)) return true;
+            _tokens.RemoveRange(count, _tokens.Count - count);
+        }
+        return false;
+    }
+
+    /// <summary>The glyph exactly filling columns c0..c1: a digit (on the digit rows), "%", or the
+    /// dot (one column ending on the digits' bottom row); null otherwise.</summary>
+    char? GlyphAt(int aw, int ah, int c0, int c1, int top, int bottom)
+    {
+        if (!Rows(aw, ah, c0, c1, out int t0, out int t1)) return null;
+        if (c0 == c1 && t1 == bottom && t0 > top && t1 - t0 <= 2) return '.';
+        var key = Key(aw, c0, c1, t0, t1);
+        if (t0 == top && t1 == bottom && _font.Digits.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(key, out int d)) return (char)('0' + d);
+        if (_pctKeys.GetAlternateLookup<ReadOnlySpan<char>>().Contains(key)) return '%';
+        return null;
     }
 
     int? ReadCells(Frame f, HudScale scale)
@@ -310,8 +460,15 @@ public sealed class LevelDetector : IHudDetector
     /// <summary>Polling thread: a stable reading that was ignored (from, to, reason "lower" / "jump").</summary>
     public event Action<int, int, string>? Ignored;
 
-    public void Process(Frame frame, HudScale scale, DateTime now, List<WatchEvent> events) =>
-        Update(_reader.Read(frame, scale), now, frame.Width, frame.Height, events);
+    /// <summary>Polling thread: the last poll's level reading (null = unreadable). The percentage is
+    /// read only when something needs it (<see cref="LevelReader.ReadPercent(Frame, HudScale, int)"/>).</summary>
+    public int? LastLevel { get; private set; }
+
+    public void Process(Frame frame, HudScale scale, DateTime now, List<WatchEvent> events)
+    {
+        LastLevel = _reader.Read(frame, scale);
+        Update(LastLevel, now, frame.Width, frame.Height, events);
+    }
 
     /// <summary>One poll's reading (null = unreadable); also called directly by tests.</summary>
     public void Update(int? level, DateTime now, int width, int height, List<WatchEvent> events)
@@ -343,6 +500,7 @@ public sealed class LevelDetector : IHudDetector
     /// <summary>Frames stopped: forget half-confirmed readings, blank the row; the baseline stays.</summary>
     public void Reset()
     {
+        LastLevel = null;
         _stable.Reset();
         _readings.Set(AlertIds.LevelUp, RowReading.None);
     }

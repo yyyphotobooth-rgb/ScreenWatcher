@@ -444,6 +444,9 @@
     // counts' Tahoma 11). Digits rendered at start-up for these heights; adjacent digits are 1 px
     // apart, the space before the percentage is wider.
     "fontFace": "Tahoma", "fontMinHeight": 9, "fontMaxHeight": 18, "maxDigitGap": 2,
+    // Percentage (EXP test only): blank columns allowed between its characters. At 11 px a "1"
+    // after the dot is 3 columns away (live 2026-11-19, "3.14%"); the space before it is 7..10.
+    "pctMaxGap": 4,
     // Fallback (no Tahoma match): the first version's 4x7 cells.
     "digitStart": 13, "digitPitch": 5, "maxDigits": 3,
     "prefix": [ "#...........", "#...........", "#...#...#...", "#....#.#....", "#....#.#....", "#....#.#...#", "####..#....#" ],
@@ -459,6 +462,34 @@
       "8": [ ".##..", "#..#.", "#..#.", ".##..", "#..#.", "#..#.", ".##.." ],
       "9": [ ".##..", "#..#.", "#..#.", ".###.", "...#.", "...#.", ".##.." ]
     }
+  },
+
+  "expTest": {
+    // "ทดสอบ EXP" (ExpTest/ExpTestRunner.cs, button and Discord /exp).
+    "defaultMinutes": 10, "minMinutes": 1, "maxMinutes": 120,
+    // Start: wait this long for a stable level + percentage reading; end: take the stable reading
+    // nearest the end time within this long.
+    "readWaitSeconds": 15,
+    // Stable = same level as the previous poll and a percentage 0..1.00 higher.
+    "stableMaxStepHundredths": 100,
+    // Kills: "ไม่ทราบ" when the counter showed a number in fewer than this share of the test's polls.
+    "killVisibleMinFraction": 0.5,
+    "listCount": 10,
+    // Map label (measured 2026-11-19, samples/README.md "Map label"): topRight anchor, 1.0 layout
+    // [x, y, w, h], scaled by the HUD scale. Map name: grey (200,200,200) with a black outline,
+    // the top line of the client (text x W-108..W-32, y 1..14 for "ต้นน้ำ Daisy(D)"; the FPS line
+    // starts at y 17); the box is wide for longer names. Zone "โซน N" under the minimap: yellow
+    // (255,255,0), x W-150..W-114, y 165..174. Same offsets / 1.11 and / 1.31 at 1920x1200 and
+    // 1920x1409 (text drawn larger and smoothed there).
+    "mapNameRect": [ -260, 0, 260, 17 ],
+    "mapZoneRect": [ -158, 161, 58, 19 ],
+    "mapNameInk": { "min": [ 150, 150, 150 ], "max": [ 255, 255, 255 ], "outlineMax": 70 },
+    "mapZoneInk": { "min": [ 150, 150, 0 ], "max": [ 255, 255, 100 ], "outlineMax": 70 },
+    // Map changed: start and end text masks differ in more pixels than this (x scale^2) in the
+    // name or the zone. Text is opaque: the same label gives the same mask over any scenery.
+    "mapNameMaxDiffPixels": 6, "mapZoneMaxDiffPixels": 3,
+    // A part with fewer text pixels (x scale^2) than this is "not seen" and not compared.
+    "mapMinTextPixels": 20
   },
 
   "questPanel": {

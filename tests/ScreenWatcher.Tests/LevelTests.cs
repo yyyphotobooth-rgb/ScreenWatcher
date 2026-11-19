@@ -113,6 +113,106 @@ public class LevelTests(ITestOutputHelper output)
         Assert.Equal(88, Reader.Read(Frame.FromBitmap(dst, new Rectangle(0, 0, w, h)), new HudScale(up, up)));
     }
 
+    // ------------------------------------------------------------- percentage (EXP test)
+
+    /// <summary>Percentages read by eye on zoomed crops of every lossless frame's line (2026-11-19).</summary>
+    public static IEnumerable<object[]> LosslessPct() =>
+    [
+        [new FullSample("field-2026-11-19/inventory_full_message.png", 0, 0, 1024, 768), 88, "50.61"],
+        [new FullSample("field-2026-11-19/full/095352_339_full_event_unreadable.png", 0, 0, 1024, 768), 88, "51.21"],
+        [new FullSample("field-2026-11-19/full/095643_337_full_event_unreadable.png", 0, 0, 1024, 768), 88, "51.45"],
+        [Live1, 85, "30.25"], [Live2, 85, "30.42"], [Live3, 85, "30.49"], [Kill298, 85, "57.68"], [Kill299, 85, "57.74"],
+        [GunEmpty, 85, "56.18"], [Alive1920, 85, "38.59"], [SmallA, 85, "23.94"], [SmallB, 85, "26.37"], [SmallC, 85, "26.37"],
+        [MissileEmpty, 85, "28.26"], [Dead1024, 85, "38.06"],
+    ];
+
+    [Theory]
+    [MemberData(nameof(LosslessPct))]
+    public void Lossless_frames_read_the_percentage(FullSample sample, int level, string pct)
+    {
+        var line = Reader.ReadLine(sample.Load(), HudScale.One);
+        Assert.Equal(level, line?.Level);
+        Assert.Equal(pct, line?.PctText);
+    }
+
+    [Fact]
+    public void Owner_client_1920x1200_reads_86_69_percent()
+    {
+        var frame = Load(Path.Combine(TestData.SamplesDir, "live-2026-11-19", "full_1920x1200.png"));
+        Assert.Equal(new LevelLine(88, 8669), Reader.ReadLine(frame, new HudScale(1.1125, 1.115)));
+    }
+
+    [Fact]
+    public void Owner_client_1920x1200_reads_a_1_after_the_dot_three_columns_away()
+    {
+        // Live capture 2026-11-19 14:13 (read-only WGC, the EXP live check): "Lv.89 3.14%"; at 11 px the
+        // "1" stands 3 blank columns after the dot. Read at the watcher's measured scale and around it.
+        var frame = Load(Path.Combine(TestData.SamplesDir, "live-2026-11-19", "full_1920x1200_lv89_3.14pct.png"));
+        foreach (var s in new[] { new HudScale(1.11, 1.11), new HudScale(1.1125, 1.115), new HudScale(1.10, 1.12) })
+            Assert.Equal(new LevelLine(89, 314), Reader.ReadLine(frame, s));
+    }
+
+    [Fact]
+    public void Scenery_touching_a_percentage_digit_gives_a_question_mark_not_a_number()
+    {
+        // Live capture 2026-11-19 14:18:34: "Lv.89 4.39%" with light-grey scenery pixels right above the
+        // "4" (they join its ink columns). The second before and after read 4.39 %.
+        var frame = Load(Path.Combine(TestData.SamplesDir, "live-2026-11-19", "full_1920x1200_lv89_scenery_touches_digit.png"));
+        Assert.Equal(new LevelLine(89, null), Reader.ReadLine(frame, new HudScale(1.11, 1.11)));
+    }
+
+    [Fact]
+    public void Jpeg_trial_frames_read_the_right_percentage_or_nothing_never_a_wrong_one()
+    {
+        // Read by eye on zoomed crops of each frame's line.
+        var byEye = new Dictionary<string, string>
+        {
+            ["false_shield_out_full.jpg"] = "17.22", ["false_sp_out_full.jpg"] = "36.39", ["levelup_quest_popup_full.jpg"] = "48.51",
+            ["unreadable_in_town_shop_full.jpg"] = "51.21", ["004703_335_kill300_full.jpg"] = "19.64", ["012821_333_kill300_full.jpg"] = "34.83",
+            ["013353_581_miss_full.jpg"] = "36.52", ["021010_333_kill300_full.jpg"] = "48.04", ["024813_331_kill300_full.jpg"] = "62.66",
+            ["032714_336_kill300_full.jpg"] = "76.88", ["062059_332_fuelLow_full.jpg"] = "16.38", ["083814_332_fuelLow_full.jpg"] = "38.50",
+            ["095356_331_unreadable_full.jpg"] = "51.21", ["095647_327_unreadable_full.jpg"] = "51.45", ["103335_340_kill300_full.jpg"] = "58.05",
+        };
+        int read = 0;
+        foreach (var f in Directory.GetFiles(Field(""), "*.jpg", SearchOption.AllDirectories))
+        {
+            string name = Path.GetFileName(f);
+            var line = Reader.ReadLine(Load(f), HudScale.One);
+            output.WriteLine($"{name}: {line?.ToString() ?? "-"}");
+            if (line?.PctHundredths is null) continue;
+            Assert.Equal(byEye[name], line.Value.PctText);
+            read++;
+        }
+        Assert.True(read >= 6, $"only {read} JPEG percentages read");
+    }
+
+    [Theory]
+    [InlineData(1.25)]
+    [InlineData(1.305)]
+    public void Stretched_synthetic_line_gives_the_level_but_no_percentage(double up)
+    {
+        // A nearest-neighbour stretch is not Tahoma at any size: the level comes from the 4x7 cells,
+        // the percentage is "?" (never guessed).
+        using var src = new Bitmap(Field("inventory_full_message.png"));
+        int w = (int)Math.Round(1024 * up), h = (int)Math.Round(768 * up);
+        using var dst = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+        using (var g = Graphics.FromImage(dst))
+        {
+            g.InterpolationMode = InterpolationMode.NearestNeighbor;
+            g.PixelOffsetMode = PixelOffsetMode.Half;
+            g.DrawImage(src, new Rectangle(0, 0, w, h));
+        }
+        Assert.Equal(new LevelLine(88, null), Reader.ReadLine(Frame.FromBitmap(dst, new Rectangle(0, 0, w, h)), new HudScale(up, up)));
+    }
+
+    [Fact]
+    public void Percentage_is_never_read_for_a_different_level()
+    {
+        var frame = new FullSample("field-2026-11-19/inventory_full_message.png", 0, 0, 1024, 768).Load();
+        Assert.Equal(5061, Reader.ReadPercent(frame, HudScale.One, 88));
+        Assert.Null(Reader.ReadPercent(frame, HudScale.One, 87));
+    }
+
     // ------------------------------------------------------------- row logic
 
     sealed class Rig

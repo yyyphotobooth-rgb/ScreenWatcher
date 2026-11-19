@@ -4,6 +4,7 @@ using ScreenWatcher.Config;
 using ScreenWatcher.Detection;
 using ScreenWatcher.Detection.Hud;
 using ScreenWatcher.Diagnostics;
+using ScreenWatcher.ExpTest;
 using ScreenWatcher.Imaging;
 
 namespace ScreenWatcher;
@@ -41,6 +42,7 @@ public sealed class Watcher : IDisposable
     readonly QuestPanelDetector _quest;
     readonly InventoryDetector _inventory;
     readonly LevelDetector _level;
+    readonly KillDetector _kill;
     readonly List<WatchEvent> _hudEvents = [];
     readonly IArmedState[] _armables;
     readonly Dictionary<string, bool> _armed = new(StringComparer.Ordinal), _armedBefore = new(StringComparer.Ordinal);
@@ -79,8 +81,10 @@ public sealed class Watcher : IDisposable
         _inventory = new InventoryDetector(config, Readings);
         _level = new LevelDetector(config, Readings, Options);
         _level.Ignored += (from, to, why) => { try { LevelIgnored?.Invoke(from, to, why); } catch (Exception) { } };
+        _kill = new KillDetector(config, glyphs, Readings);
         _hudDetectors = [new AmmoDetector(config, glyphs, Readings), new FuelDetector(config, Readings, Options),
-            new KillDetector(config, glyphs, Readings), items, _inventory, _level];
+            _kill, items, _inventory, _level];
+        ExpTest = new ExpTestRunner(config, _level.Reader);
         _unreadable = new UnreadableDetector(config, Readings, Options, () => items.BarHiddenPolls, id => _quest!.Covers(id));
         _quest = new QuestPanelDetector(config, Readings, Options, () => _unreadable.LimitSeconds,
             quietUntil: () => _level.LastAlertAt?.AddSeconds(config.Level.QuestQuietSeconds));
@@ -96,6 +100,9 @@ public sealed class Watcher : IDisposable
         CopyArmed(_armedBefore);
         ResetHud();
     }
+
+    /// <summary>"ทดสอบ EXP": fed once per poll (idle: one flag check).</summary>
+    public ExpTestRunner ExpTest { get; }
 
     /// <summary>The last few seconds of HUD region crops (always on; /miss and auto collection).</summary>
     public HudRing Ring { get; }
@@ -165,7 +172,8 @@ public sealed class Watcher : IDisposable
 
     void Tick()
     {
-        if (_paused || !Monitor.TryEnter(_gate)) return;
+        if (_paused) { ExpTest.OnPaused(DateTime.Now); return; }
+        if (!Monitor.TryEnter(_gate)) return;
         try
         {
             var now = DateTime.Now;
@@ -191,6 +199,7 @@ public sealed class Watcher : IDisposable
             _quest.Process(_frame, scale, now, _hudEvents);
             _unreadable.Process(now, _frame.Width, _frame.Height, _hudEvents);
             foreach (var e in _hudEvents) Raise(e);
+            ExpTest.OnFrame(_frame, scale, now, _level.LastLevel, _kill.LastObservation, dead: !_death.Armed);
             Ring.Push(_frame, scale, now);
             _collector?.OnFrame(_frame, scale, now, new AutoInputs(now, scale, _scale.Current, _readingText, _threshold, _unreadable));
             CheckRearmed();
@@ -282,6 +291,7 @@ public sealed class Watcher : IDisposable
 
     void NoFrame(GameStatus status)
     {
+        ExpTest.OnNoFrame(DateTime.Now, gameMissing: status.State == GameState.NotFound);
         foreach (var d in _frameDetectors) d.ResetTiming();
         ResetHud();
         SetStatus(status);

@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel, InventoryConfig Inventory, LevelConfig Level)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel, InventoryConfig Inventory, LevelConfig Level, ExpTestConfig ExpTest)
 {
     public const string FileName = "detectors.json";
 
@@ -221,4 +221,16 @@ public sealed record InventoryConfig(
 public sealed record LevelConfig(
     string Message, int StablePolls, int MaxStep, double QuestQuietSeconds, int[] Area, int InkMin, int InkMaxSpread,
     double MinScore, double MinScoreScaled, double MinMargin, int DigitStart, int DigitPitch, int MaxDigits,
-    string[] Prefix, Dictionary<string, string[]> Digits, string FontFace, int FontMinHeight, int FontMaxHeight, int MaxDigitGap);
+    string[] Prefix, Dictionary<string, string[]> Digits, string FontFace, int FontMinHeight, int FontMaxHeight, int MaxDigitGap, int PctMaxGap = 4);
+
+/// <summary>"ทดสอบ EXP" (ExpTest/ExpTestRunner.cs): exp gained over a set time. Readings are the level
+/// line's level + percentage; a reading is stable when the previous poll read the same level and a
+/// percentage at most StableMaxStepHundredths lower (exp only goes up between two polls).</summary>
+public sealed record ExpTestConfig(
+    int DefaultMinutes, int MinMinutes, int MaxMinutes, double ReadWaitSeconds, int StableMaxStepHundredths,
+    double KillVisibleMinFraction, int ListCount, int[] MapNameRect, int[] MapZoneRect,
+    TextInk MapNameInk, TextInk MapZoneInk, int MapNameMaxDiffPixels, int MapZoneMaxDiffPixels, int MapMinTextPixels);
+
+/// <summary>Text pixels of a label: colour between Min and Max (RGB), with a dark outline pixel
+/// (all channels at most OutlineMax) within one pixel.</summary>
+public sealed record TextInk(int[] Min, int[] Max, int OutlineMax);

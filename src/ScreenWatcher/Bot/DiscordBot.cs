@@ -35,18 +35,20 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
     readonly SsCommandHandler _ss;
     readonly MissCommandHandler? _miss;
     readonly ResetCommandHandler? _reset;
+    readonly ExpCommandHandler? _exp;
     readonly SemaphoreSlim _connectGate = new(1, 1);
     DiscordSocketClient? _client;
     BotStatus _status = new(BotState.NotSetUp);
     ulong? _registeredGuild;
     bool _stopping;
 
-    public DiscordBot(AppLog log, SsCommandHandler ss, MissCommandHandler? miss = null, ResetCommandHandler? reset = null)
+    public DiscordBot(AppLog log, SsCommandHandler ss, MissCommandHandler? miss = null, ResetCommandHandler? reset = null, ExpCommandHandler? exp = null)
     {
         _log = log;
         _ss = ss;
         _miss = miss;
         _reset = reset;
+        _exp = exp;
     }
 
     /// <summary>A Discord problem worth keeping in the journal (library warnings/errors, login or
@@ -168,8 +170,14 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
                     .WithName(ResetCommandHandler.CommandName)
                     .WithDescription(ResetCommandHandler.CommandDescription)
                     .Build());
+            if (_exp is not null)
+                await guild.CreateApplicationCommandAsync(new SlashCommandBuilder()
+                    .WithName(ExpCommandHandler.CommandName)
+                    .WithDescription(ExpCommandHandler.CommandDescription)
+                    .AddOption(ExpCommandHandler.ValueOption, ApplicationCommandOptionType.String, ExpCommandHandler.ValueDescription, isRequired: false)
+                    .Build());
             _registeredGuild = gid;
-            _log.Write($"/ss{(_miss is null ? "" : ", /miss")}{(_reset is null ? "" : ", /reset")} registered for server {gid}");
+            _log.Write($"/ss{(_miss is null ? "" : ", /miss")}{(_reset is null ? "" : ", /reset")}{(_exp is null ? "" : ", /exp")} registered for server {gid}");
         }
         catch (Exception ex)
         {
@@ -185,7 +193,8 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
             var i = new SocketSlashAdapter(cmd);
             if (await _ss.HandleAsync(i)) return;
             if (_miss is not null && await _miss.HandleAsync(i)) return;
-            if (_reset is not null) await _reset.HandleAsync(i);
+            if (_reset is not null && await _reset.HandleAsync(i)) return;
+            if (_exp is not null) await _exp.HandleAsync(i);
         }
         catch (Exception ex)
         {

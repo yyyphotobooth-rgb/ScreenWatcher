@@ -8,6 +8,7 @@ using ScreenWatcher.Collection;
 using ScreenWatcher.Config;
 using ScreenWatcher.Detection;
 using ScreenWatcher.Diagnostics;
+using ScreenWatcher.ExpTest;
 using ScreenWatcher.Imaging;
 using ScreenWatcher.Logging;
 
@@ -46,6 +47,8 @@ public sealed class MainForm : Form
     readonly List<AlertRow> _rows = [];
     readonly DarkButton _pause = new() { Kind = ButtonKind.Primary, Text = "หยุดเฝ้าชั่วคราว" };
     readonly DarkButton _testMain = new() { Text = "ทดสอบส่ง" };
+    readonly DarkButton _expButton = new() { Text = "ทดสอบ EXP" };
+    readonly ExpTestService _exp;
     readonly DarkButton _openSettings = new() { Text = "ตั้งค่า" };
     readonly Label _lastAlert = MakeLabel("แจ้งเตือนล่าสุด: ยังไม่มี", Theme.Small, Theme.Muted, Theme.Background);
 
@@ -107,10 +110,16 @@ public sealed class MainForm : Form
             SaveEvidence = _settings.SaveAlertEvidence,
         };
         _diag.Evidence.Start();
+        // EXP test: messages go through the alert queue (so --no-send only logs them).
+        _exp = new ExpTestService(_watcher.ExpTest, new ExpTestStore(AppSettings.ExpTestRoot), m => _alerts!.Enqueue(m), _diag.Journal, config.ExpTest.ListCount);
+        _exp.ResultReady += (r, file) => _log.Write($"EXP test result: {r.Text}" + (file is null ? " (not saved)" : $" -> {file}"));
+        _watcher.ExpTest.StartDecided += (o, source) => _log.Write($"EXP test start ({source}): {o.Text}");
         _bot = new DiscordBot(_log,
             new SsCommandHandler(_watcher.Snapshot, () => _bot!.ChosenChannelId, o => _diag.OnCommand(SsCommandHandler.CommandName, o)),
             new MissCommandHandler(_diag.RecordMiss, () => _bot!.ChosenChannelId, o => _diag.OnCommand(MissCommandHandler.CommandName, o)),
-            new ResetCommandHandler(_watcher.ResetInventoryFull, () => _bot!.ChosenChannelId, o => _diag.OnCommand(ResetCommandHandler.CommandName, o)))
+            new ResetCommandHandler(_watcher.ResetInventoryFull, () => _bot!.ChosenChannelId, o => _diag.OnCommand(ResetCommandHandler.CommandName, o)),
+            new ExpCommandHandler(_exp, () => _bot!.ChosenChannelId, config.ExpTest.DefaultMinutes, config.ExpTest.MinMinutes, config.ExpTest.MaxMinutes,
+                o => _diag.OnCommand(ExpCommandHandler.CommandName, o)))
         {
             ChosenGuildId = _settings.DiscordGuildId,
             ChosenChannelId = _settings.DiscordChannelId,
@@ -184,7 +193,7 @@ public sealed class MainForm : Form
         table.Controls.Add(colHeader);
 
         // Everything below the table: gap, buttons, gap, last-alert line, bottom padding.
-        int below = S(14) + S(44) + S(14) + S(22) + pad;
+        int below = S(14) + S(44) + S(10) + S(44) + S(14) + S(22) + pad;
         int rowsH = AlertRowCatalog.All.Sum(s => s.Implemented ? S(48) : S(44));
         // One page: the whole list is shown when the screen is tall enough; only on a short screen
         // the list gets its own scroll bar (the rest of the window stays put).
@@ -265,6 +274,10 @@ public sealed class MainForm : Form
         _testMain.SetBounds(_openSettings.Left - gap - testW, y, testW, bh);
         _pause.SetBounds(pad, y, _testMain.Left - gap - pad, bh);
         _mainPage.Controls.AddRange([_pause, _testMain, _openSettings]);
+        y += bh + gap;
+        // [ทดสอบ EXP] full width; while a test runs it shows the time left and cancels.
+        _expButton.SetBounds(pad, y, W - pad * 2, bh);
+        _mainPage.Controls.Add(_expButton);
         y += bh + S(14);
 
         _lastAlert.SetBounds(pad, y, W - pad * 2, S(22));
@@ -280,6 +293,7 @@ public sealed class MainForm : Form
             UpdateWatchState();
         };
         _testMain.Click += async (_, _) => await TestSendAsync();
+        _expButton.Click += async (_, _) => await ExpButtonAsync();
         _openSettings.Click += (_, _) => ShowPage(settings: true);
     }
 
@@ -504,6 +518,7 @@ public sealed class MainForm : Form
     {
         // X exits the app (no tray).
         _uiTimer.Dispose();
+        _exp.Dispose();   // a running test is dropped (journalled)
         _watcher.Dispose();
         _alerts.Dispose();
         try { Task.Run(async () => await _bot.DisposeAsync()).Wait(TimeSpan.FromSeconds(4)); } catch (AggregateException) { }
@@ -532,8 +547,40 @@ public sealed class MainForm : Form
         OnUi(UpdateRows);
     }
 
+    async Task ExpButtonAsync()
+    {
+        if (_watcher.ExpTest.Phase != ExpPhase.Idle)
+        {
+            _lastAlert.Text = _exp.Cancel(ExpTestService.SourceButton);
+            UpdateExpButton();
+            return;
+        }
+        int minutes = _config.ExpTest.DefaultMinutes;
+        var task = _exp.StartAsync(minutes, ExpTestService.SourceButton);
+        UpdateExpButton();
+        string text = await task;
+        _lastAlert.Text = text;
+        UpdateExpButton();
+    }
+
+    void UpdateExpButton()
+    {
+        var r = _watcher.ExpTest;
+        string text = r.Phase switch
+        {
+            ExpPhase.Starting => "กำลังอ่านค่า EXP... (กดเพื่อยกเลิก)",
+            ExpPhase.Running => $"ยกเลิกทดสอบ EXP · เหลือ {ExpTexts.Clock(r.TimeLeft(DateTime.Now) ?? TimeSpan.Zero)}",
+            ExpPhase.Finishing => "กำลังสรุปผลทดสอบ EXP... (กดเพื่อยกเลิก)",
+            _ => $"ทดสอบ EXP · {_config.ExpTest.DefaultMinutes} นาที",
+        };
+        if (_expButton.Text != text) { _expButton.Text = text; _expButton.Invalidate(); }
+        var kind = r.Phase == ExpPhase.Idle ? ButtonKind.Secondary : ButtonKind.Primary;
+        if (_expButton.Kind != kind) { _expButton.Kind = kind; _expButton.Invalidate(); }
+    }
+
     void OnUiTick()
     {
+        UpdateExpButton();
         UpdateRows();
         if (++_sizeTick % 2 == 0 && _settingsPage.Visible) UpdateCollectSize();
     }

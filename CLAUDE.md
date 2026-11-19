@@ -38,8 +38,12 @@ Discord bot (Discord.Net, runs inside the app).
   detectors.json `diagnostics`.
 - `src/ScreenWatcher/Alerts`: event -> Thai text + PNG (death: full client frame; HUD rows: crop of
   that HUD part), queued and sent with retries.
-- `src/ScreenWatcher/Bot`: Discord bot (Guilds intent only, slash commands /ss, /miss, /reset). Token DPAPI-encrypted
+- `src/ScreenWatcher/Bot`: Discord bot (Guilds intent only, slash commands /ss, /miss, /reset, /exp). Token DPAPI-encrypted
   (`Config/TokenStore.cs`); never log or commit it (`Logging/AppLog` scrubs it).
+- `src/ScreenWatcher/ExpTest`: "ทดสอบ EXP" (button + Discord /exp): exp gained over N minutes from the
+  level line's percentage (`LevelReader.ReadPercent`, read only while a test runs), kills from the
+  kill counter, map label crop (`Detection/Hud/MapLabel.cs`, compared on text pixels). Results in
+  %LOCALAPPDATA%\ScreenWatcher\exp-tests.
 - `src/ScreenWatcher/UI`: main window + settings page, built from `design/mockup-*.html`.
 - `samples/`: reference images and their classification (`samples/README.md`).
 

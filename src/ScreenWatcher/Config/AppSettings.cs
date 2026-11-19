@@ -58,6 +58,7 @@ public sealed class AppSettings
     public static string CollectRoot => Path.Combine(DataRoot, "collect");
     public static string EvidenceRoot => Path.Combine(DataRoot, "evidence");
     public static string JournalRoot => Path.Combine(DataRoot, "journal");
+    public static string ExpTestRoot => Path.Combine(DataRoot, "exp-tests");
 
     public static AppSettings Load(string path)
     {
