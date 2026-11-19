@@ -75,6 +75,7 @@ public sealed class AutoCollectRules
         foreach (var item in config.Items.Items) rows.Add(new(item.Id, RowKind.Item, IndexOf(config.Items.CropRegion)));
         // Message box: only rules f (its alert) and g ("?" = box not seen) apply.
         rows.Add(new(AlertIds.InventoryFull, RowKind.Status, IndexOf(config.Inventory.CropRegion)));
+        rows.Add(new(AlertIds.LevelUp, RowKind.Status, IndexOf("level")));
         _rows = rows.ToArray();
     }
 

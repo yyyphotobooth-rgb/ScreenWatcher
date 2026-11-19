@@ -186,6 +186,11 @@
     // Collected and used for alert crops like the regions above, but NOT kept in the in-memory
     // HUD ring (/miss, auto "pre" crops): the ring stays within its 8 MB budget at 1600x1024.
     "unbufferedRegions": [
+      // Level line "Lv.88 50.61%" (bottom centre, exp bar): text rows H-12..H-6.
+      {
+        "name": "level", "anchor": "bottomCenter", "rect": [ -130, -16, 260, 16 ],
+        "keys": [ { "name": "text", "min": [ 215, 215, 215 ], "max": [ 229, 229, 229 ], "outlineMax": 20 } ]
+      },
       // System message box (bottom right): text lines from W-330, y H-159..H-63; the framed box's
       // title at H-178. Yellow phrase (246,255,0) and green (0,255,0) text with a black outline.
       {
@@ -356,7 +361,7 @@
       [ "gunAmmoEmpty", "ปืนกล" ], [ "missileEmpty", "มิสไซล์" ], [ "ammoBox", "กล่องกระสุน" ],
       [ "fuelLow", "น้ำมัน" ], [ "fuelBottles", "ขวดน้ำมัน" ], [ "monsterCard", "บัตรกันมอน" ],
       [ "hpPotions", "ยาเลือด" ], [ "shieldPotions", "ยาเกราะ" ], [ "spPotions", "ยา SP" ],
-      [ "kill300", "นับมอน" ], [ "inventoryFull", "กล่องข้อความระบบ" ]
+      [ "kill300", "นับมอน" ], [ "inventoryFull", "กล่องข้อความระบบ" ], [ "levelUp", "เลเวล" ]
     ]
   },
 
@@ -406,6 +411,40 @@
     // (the "อ่านค่าไม่ได้" row reports it as "กล่องข้อความระบบ"). A frameless box without text is
     // indistinguishable from an empty one: no news, the row keeps its value.
     "missingPolls": 3
+  },
+
+  "level": {
+    // Row "เลเวลอัพ" (Detection/Hud/LevelDetector.cs): the line "Lv.88 50.61%" at the bottom centre,
+    // on the exp bar under the item bar (text rows H-12..H-6 at 1.0). Light grey (222,222,222) with
+    // a black outline, in the game's own 4x7 pixel font (no Windows font renders it). Left-aligned:
+    // "Lv." (12 px), the level digits from +13 px at a 5 px pitch, then a space. Digits measured on
+    // the lossless frames (live*_printwindow, from-chat, collect 2026-11-18, the trial's PNGs:
+    // levels 85 and 88, percentages); "2" only on the trial's JPEG frames (36.52 %, 51.21 %, 17.22 %).
+    // At ~1.3 no sample shows the line whole (alive_2560x1440 cuts it): cells are sampled at the
+    // HUD scale, tested on a synthetic stretch only.
+    "message": "เลื่อนเลเวล! Lv.{0} → Lv.{1}",
+    "stablePolls": 3,
+    "maxStep": 2,
+    // Quest panel message suppressed this long after a level-up alert.
+    "questQuietSeconds": 60,
+    // bottomCenter [x, y, w, h], 1.0 layout. Rows above H-14 show scenery.
+    "area": [ -130, -14, 260, 12 ],
+    "inkMin": 170, "inkMaxSpread": 40,
+    "minScore": 0.95, "minScoreScaled": 0.85, "minMargin": 0.05,
+    "digitStart": 13, "digitPitch": 5, "maxDigits": 3,
+    "prefix": [ "#...........", "#...........", "#...#...#...", "#....#.#....", "#....#.#....", "#....#.#...#", "####..#....#" ],
+    "digits": {
+      "0": [ ".##..", "#..#.", "#..#.", "#..#.", "#..#.", "#..#.", ".##.." ],
+      "1": [ "..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###." ],
+      "2": [ "###..", "...#.", "...#.", "..#..", ".#...", "#....", "####." ],
+      "3": [ "###..", "...#.", "...#.", ".##..", "...#.", "...#.", "###.." ],
+      "4": [ "...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#." ],
+      "5": [ "####.", "#....", "#....", "###..", "...#.", "...#.", "###.." ],
+      "6": [ ".##..", "#....", "#....", "###..", "#..#.", "#..#.", ".##.." ],
+      "7": [ "####.", "...#.", "..#..", "..#..", ".#...", ".#...", "#...." ],
+      "8": [ ".##..", "#..#.", "#..#.", ".##..", "#..#.", "#..#.", ".##.." ],
+      "9": [ ".##..", "#..#.", "#..#.", ".###.", "...#.", "...#.", ".##.." ]
+    }
   },
 
   "questPanel": {

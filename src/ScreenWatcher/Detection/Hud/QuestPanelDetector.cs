@@ -20,6 +20,7 @@ public sealed class QuestPanelDetector
     readonly HudReadings _readings;
     readonly HudOptions _options;
     readonly Func<int> _limitSeconds;
+    readonly Func<DateTime?>? _quietUntil;
     readonly HashSet<string> _covered;
     readonly Dictionary<string, string> _names;
     DateTime? _since;
@@ -27,8 +28,11 @@ public sealed class QuestPanelDetector
     bool _fired;
 
     /// <param name="limitSeconds">The "อ่านค่าไม่ได้" row's limit (UnreadableDetector.LimitSeconds).</param>
-    public QuestPanelDetector(WatcherConfig config, HudReadings readings, HudOptions options, Func<int> limitSeconds, QuestPanelFinder? finder = null)
+    /// <param name="quietUntil">No message before this time (a level-up alert was just sent).</param>
+    public QuestPanelDetector(WatcherConfig config, HudReadings readings, HudOptions options, Func<int> limitSeconds, QuestPanelFinder? finder = null,
+        Func<DateTime?>? quietUntil = null)
     {
+        _quietUntil = quietUntil;
         _c = config.QuestPanel;
         _finder = finder ?? new QuestPanelFinder(_c);
         _readings = readings;
@@ -71,6 +75,7 @@ public sealed class QuestPanelDetector
         if (_fired || (now - _since.Value).TotalSeconds <= _limitSeconds()) return;
         _fired = true;
         if (!_options.IsEnabled(AlertIds.Unreadable)) return;   // row off: nothing is sent, still "fired" for this appearance
+        if (_quietUntil?.Invoke() is { } quiet && now < quiet) return;   // the level-up alert already told the owner
         double secs = Math.Round((now - _since.Value).TotalSeconds, 1);
         var rows = _c.CoveredRows.Select(id => new UnreadableRow(id, _names.GetValueOrDefault(id, id), secs)).ToList();
         events.Add(new WatchEvent(WatchEventKind.Hud, _c.Message, now, AlertIds.Unreadable, new Rectangle(0, 0, width, height), Unreadable: rows));

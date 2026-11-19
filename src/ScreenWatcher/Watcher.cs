@@ -40,6 +40,7 @@ public sealed class Watcher : IDisposable
     readonly UnreadableDetector _unreadable;
     readonly QuestPanelDetector _quest;
     readonly InventoryDetector _inventory;
+    readonly LevelDetector _level;
     readonly List<WatchEvent> _hudEvents = [];
     readonly IArmedState[] _armables;
     readonly Dictionary<string, bool> _armed = new(StringComparer.Ordinal), _armedBefore = new(StringComparer.Ordinal);
@@ -76,10 +77,13 @@ public sealed class Watcher : IDisposable
         var glyphs = GlyphSet.LoadAll(Path.Combine(AppContext.BaseDirectory, GlyphSet.FileName));
         var items = new ItemDetector(config, IconSet.Load(Path.Combine(AppContext.BaseDirectory, IconSet.FileName)), Readings, Options);
         _inventory = new InventoryDetector(config, Readings);
+        _level = new LevelDetector(config, Readings, Options);
+        _level.Ignored += (from, to, why) => { try { LevelIgnored?.Invoke(from, to, why); } catch (Exception) { } };
         _hudDetectors = [new AmmoDetector(config, glyphs, Readings), new FuelDetector(config, Readings, Options),
-            new KillDetector(config, glyphs, Readings), items, _inventory];
+            new KillDetector(config, glyphs, Readings), items, _inventory, _level];
         _unreadable = new UnreadableDetector(config, Readings, Options, () => items.BarHiddenPolls, id => _quest!.Covers(id));
-        _quest = new QuestPanelDetector(config, Readings, Options, () => _unreadable.LimitSeconds);
+        _quest = new QuestPanelDetector(config, Readings, Options, () => _unreadable.LimitSeconds,
+            quietUntil: () => _level.LastAlertAt?.AddSeconds(config.Level.QuestQuietSeconds));
         _unreadable.Recovered += r => { try { UnreadableRecovered?.Invoke(r); } catch (Exception) { } };
         _armables = [.. _hudDetectors.OfType<IArmedState>()];
         Ring = new HudRing(config.Collect.Regions.Select(r => new CollectRegion(r)),
@@ -115,6 +119,9 @@ public sealed class Watcher : IDisposable
         _inventory.RequestReset();
         return was;
     }
+
+    /// <summary>Polling thread: a stable level reading was ignored (from, to, "lower" / "jump").</summary>
+    public event Action<int, int, string>? LevelIgnored;
 
     /// <summary>The threshold a row uses now (user's value or the row's default).</summary>
     public int ThresholdOf(string alertId) => _threshold(alertId);
@@ -166,7 +173,7 @@ public sealed class Watcher : IDisposable
             IntPtr hwnd = _finder.Find();
             Raise(_drop.Update(hwnd != IntPtr.Zero, now));
 
-            if (hwnd == IntPtr.Zero) { _unreadable.EndSession(); NoFrame(new(GameState.NotFound)); return; }
+            if (hwnd == IntPtr.Zero) { _unreadable.EndSession(); _level.EndSession(); NoFrame(new(GameState.NotFound)); return; }
 
             switch (_capture.Capture(hwnd, _frame))
             {

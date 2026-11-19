@@ -80,6 +80,7 @@ public sealed class RowStats
         value = 0;
         if (text == Detection.Hud.ItemDetector.GoneText) return true;
         var s = text.AsSpan();
+        if (s.StartsWith("Lv.")) s = s[3..];
         if (s.Length > 0 && (s[0] == '~' || s[0] == '>')) s = s[1..];
         if (s.Length > 0 && s[^1] == '%') s = s[..^1];
         return s.Length > 0 && int.TryParse(s, NumberStyles.None, CultureInfo.InvariantCulture, out value);

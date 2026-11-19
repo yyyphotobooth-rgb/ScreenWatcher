@@ -128,6 +128,7 @@ public sealed class MainForm : Form
         _watcher.Polled += _diag.OnPolled;
         _watcher.Rearmed += _diag.OnRearmed;
         _watcher.UnreadableRecovered += _diag.OnUnreadableRecovered;
+        _watcher.LevelIgnored += _diag.OnLevelIgnored;
         _bot.StatusChanged += s => { _diag.OnDiscordStatus(s.State.ToString(), s.Reason); OnUi(() => { UpdateDiscordTile(); UpdateBotStatus(); RefreshChannels(); }); };
         _bot.Problem += _diag.OnDiscordProblem;
         _bot.ChannelsChanged += () => OnUi(RefreshChannels);

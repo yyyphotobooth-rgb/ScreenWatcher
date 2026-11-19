@@ -199,6 +199,11 @@ public sealed class DiagnosticsHub : IDisposable
         return id;
     }
 
+    /// <summary>Polling thread: a stable level reading lower than the last one or more than the
+    /// allowed step above it was ignored (no alert).</summary>
+    public void OnLevelIgnored(int from, int to, string reason) =>
+        Journal.Write("level", ("event", "ignored"), ("from", from), ("to", to), ("reason", reason));
+
     /// <summary>Polling thread: a row reported by the "อ่านค่าไม่ได้" alert shows a value again.</summary>
     public void OnUnreadableRecovered(UnreadableRow r) =>
         Journal.Write("unreadable", ("event", "recovered"), ("rows", new[] { r.Id }), ("seconds", new[] { r.Seconds }), ("value", SafeReading(r.Id)));

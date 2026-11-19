@@ -31,6 +31,8 @@ public static class AlertRowCatalog
         new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: true),
         // "ตอนนี้": ปกติ / เต็ม (รอรีเซ็ต) (latched until "รีเซ็ต" or /reset) / ? (message box not seen).
         new(AlertIds.InventoryFull, "ช่องเก็บของเต็ม", Implemented: true, ResetButton: true),
+        // "ตอนนี้": Lv.N, or ? when the level line cannot be read.
+        new(AlertIds.LevelUp, "เลเวลอัพ", Implemented: true),
         // "ตอนนี้": ปกติ, or the short names of the rows over the limit (detectors.json "unreadable").
         new(AlertIds.Unreadable, "อ่านค่าไม่ได้เกิน", Implemented: true, "วินาที", 10, MaxThreshold: 3600, MinThreshold: 1),
     ];

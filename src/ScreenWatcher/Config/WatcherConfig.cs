@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel, InventoryConfig Inventory)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel, InventoryConfig Inventory, LevelConfig Level)
 {
     public const string FileName = "detectors.json";
 
@@ -210,3 +210,11 @@ public sealed record InventoryConfig(
     string Message, string Phrase, string FontFace, int FontMinHeight, int FontMaxHeight, string OkText, string FullText, string CropRegion,
     int[] TextArea, int[] YellowMin, int[] YellowMax, int[] GreenMin, int[] GreenMax, double MaxMismatch, int TextMinPixels,
     int[] TitleAt, int TitleSearch, int TitleDelta, double TitleMinMatch, double TitleMinMatchScaled, string[] TitleMask, int MissingPolls);
+
+/// <summary>Row "เลเวลอัพ" (Detection/Hud/LevelDetector.cs). Area = bottomCenter [x, y, w, h] in the
+/// 1.0 layout; Prefix = "Lv." (7 rows), Digits = 5x7 cells ('#' ink); a cell matches with at least
+/// MinScore (MinScoreScaled on a stretched HUD) of its pixels and MinMargin over the next digit.</summary>
+public sealed record LevelConfig(
+    string Message, int StablePolls, int MaxStep, double QuestQuietSeconds, int[] Area, int InkMin, int InkMaxSpread,
+    double MinScore, double MinScoreScaled, double MinMargin, int DigitStart, int DigitPitch, int MaxDigits,
+    string[] Prefix, Dictionary<string, string[]> Digits);
