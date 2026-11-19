@@ -580,6 +580,90 @@ public class ExpTestTests(ITestOutputHelper output)
         Assert.True(img.Width > 500);
     }
 
+    static async Task<FakeInteraction> Command(ServiceRig g, string? value)
+    {
+        var i = new FakeInteraction("exp", 42, value);
+        Assert.True(await g.Handler.HandleAsync(i));
+        return i;
+    }
+
+    /// <summary>/exp 30 through the handler; the start reading is at T0+1 s (Lv.88 50.01%); T = 2 after.</summary>
+    static async Task StartThirty(ServiceRig g)
+    {
+        var start = g.Handler.HandleAsync(new FakeInteraction("exp", 42, "30"));
+        await g.WaitStarted();
+        g.Poll(2);
+        await start;
+        Assert.Equal(ExpPhase.Running, g.Runner.Phase);
+    }
+
+    [Fact]
+    public async Task Exp_stop_mid_test_ends_now_with_the_normal_result_for_the_minutes_measured_and_lists_it()
+    {
+        using var g = new ServiceRig();
+        await StartThirty(g);
+        g.Poll(18 * 60);                                        // 18 minutes into a 30-minute test
+        Assert.Empty(g.Sent);
+        var stop = await Command(g, "stop");
+        Assert.Equal(["defer", "followup:หยุดทดสอบ EXP แล้ว กำลังสรุปผลจาก 18 นาทีที่วัดได้"], stop.Calls);
+        Assert.Equal(ExpPhase.Finishing, g.Runner.Phase);
+        g.Poll(1);                                              // the next stable reading is the end
+        var m = Assert.Single(g.Sent);
+        Assert.Equal(ExpTestService.AlertId, m.AlertId);
+        Assert.StartsWith("ทดสอบ EXP จบ · 18 นาที\nได้ +10.81% (Lv.88 50.01% → Lv.88 60.82%)\nเฉลี่ย 0.60% ต่อนาที\n", m.Text);
+        Assert.NotNull(m.Png);
+        Assert.Equal(ExpPhase.Idle, g.Runner.Phase);
+        var saved = File.ReadAllText(Path.Combine(g.Root, "20261119_140001.json"));
+        Assert.Contains("\"Minutes\": 18,", saved);
+        var list = await Command(g, "list");
+        Assert.Equal(["defer", "file:" + ExpTexts.ListCaption], list.Calls);
+        // The whole normal end message (ExpTexts.Result): 10.81 % over 1081 s.
+        Assert.Equal("ทดสอบ EXP จบ · 18 นาที\nได้ +10.81% (Lv.88 50.01% → Lv.88 60.82%)\nเฉลี่ย 0.60% ต่อนาที\n"
+            + "เวลาต่อ 1 เลเวล (Lv.88) : ราว 2 ชม. 47 นาที\nเหลืออีกราว 1 ชม. 5 นาที จะเลเวลอัพ\nยิงมอน ไม่ทราบ", m.Text);
+    }
+
+    [Fact]
+    public async Task Exp_stop_under_one_minute_is_dropped_and_while_starting_too()
+    {
+        using var g = new ServiceRig();
+        await StartThirty(g);
+        g.Poll(30);
+        var stop = await Command(g, "stop");
+        Assert.Equal(["defer", "followup:" + ExpTexts.StopTooShort], stop.Calls);
+        Assert.Equal("หยุดทดสอบ EXP แล้ว วัดได้ไม่ถึง 1 นาที สั้นเกินไป ไม่เก็บผล", ExpTexts.StopTooShort);
+        Assert.Equal(ExpPhase.Idle, g.Runner.Phase);
+        g.Poll(120);
+        Assert.Empty(g.Sent);
+        Assert.False(Directory.Exists(g.Root) && Directory.GetFiles(g.Root, "*.json").Length > 0);
+
+        // Still waiting for the first stable reading: nothing measured, the start request gets the same text.
+        var start = g.Handler.HandleAsync(new FakeInteraction("exp", 42, "5"));
+        await g.WaitStarted();
+        var stop2 = await Command(g, "stop");
+        Assert.Equal(["defer", "followup:" + ExpTexts.StopTooShort], stop2.Calls);
+        await start;
+        Assert.Equal(ExpPhase.Idle, g.Runner.Phase);
+    }
+
+    [Fact]
+    public async Task Exp_stop_with_no_test_says_so_and_cancel_still_discards()
+    {
+        using var g = new ServiceRig();
+        var none = await Command(g, "stop");
+        Assert.Equal(["defer", "followup:ไม่มีการทดสอบ EXP ที่กำลังทำอยู่"], none.Calls);
+
+        await StartThirty(g);
+        g.Poll(5 * 60);
+        var cancel = await Command(g, "cancel");
+        Assert.Equal(["defer", "followup:ยกเลิกทดสอบ EXP แล้ว"], cancel.Calls);
+        Assert.Equal(ExpPhase.Idle, g.Runner.Phase);
+        g.Poll(40 * 60);
+        Assert.Empty(g.Sent);                                   // cancel: no result, nothing stored
+        Assert.False(Directory.Exists(g.Root) && Directory.GetFiles(g.Root, "*.json").Length > 0);
+        var after = await Command(g, "stop");
+        Assert.Equal(["defer", "followup:" + ExpTexts.NothingToStop], after.Calls);
+    }
+
     [Fact]
     public async Task Exp_command_follows_the_channel_rule_and_rejects_bad_values()
     {

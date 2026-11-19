@@ -35,6 +35,9 @@ public sealed record ExpResult(string Id, string Source, int Minutes, ExpReading
     MapCompare? Map)
 {
     public bool Usable => End is not null;
+
+    /// <summary>Ended early by "/exp stop" (Minutes = the minutes measured).</summary>
+    public bool Stopped { get; init; }
     public bool Comparable => Usable && !Flags.NotComparable;
 
     /// <summary>(level_end - level_start) * 100 + pct_end - pct_start, in hundredths of a percent.</summary>
@@ -70,6 +73,10 @@ public static class ExpTexts
     public static string Busy(TimeSpan left) => $"กำลังทดสอบ EXP อยู่ เหลืออีก {Clock(left)}";
     public const string Cancelled = "ยกเลิกทดสอบ EXP แล้ว";
     public const string NothingToCancel = "ไม่มีการทดสอบ EXP ที่กำลังทำอยู่";
+    public const string NothingToStop = NothingToCancel;
+    public static string Stopping(int minutes) => $"หยุดทดสอบ EXP แล้ว กำลังสรุปผลจาก {minutes} นาทีที่วัดได้";
+    public const string StopTooShort = "หยุดทดสอบ EXP แล้ว วัดได้ไม่ถึง 1 นาที สั้นเกินไป ไม่เก็บผล";
+    public const string StopAlreadyEnding = "ทดสอบ EXP ครบเวลาแล้ว กำลังสรุปผลอยู่";
     public const string ListEmpty = "ยังไม่มีผลทดสอบ EXP ที่ใช้เทียบได้";
     public const string ListCaption = "ผลเทียบกันได้เฉพาะที่เลเวลเดียวกัน และไม่ได้อยู่ในช่วงโบนัส EXP";
     public const string Unusable = "ผลใช้ไม่ได้ อ่านค่า EXP ตอนจบไม่ได้";
@@ -134,6 +141,9 @@ public static class ExpMath
     public static string RateText(double rate) => rate.ToString(Math.Abs(rate) < 0.10 ? "0.000" : "0.00", CultureInfo.InvariantCulture);
 }
 
+/// <summary>What happened to a stop request (<see cref="ExpTestRunner.Stop"/>).</summary>
+public enum ExpStopStatus { NotRunning, TooShort, Stopping, AlreadyEnding }
+
 /// <summary>What happened to a start request.</summary>
 public enum ExpStartStatus { Started, Refused, Busy, AlreadyStarting }
 
@@ -170,7 +180,7 @@ public sealed class ExpTestRunner
     // Kills
     int? _killRaw, _killLast;
     int _killSum, _killPolls, _killVisible;
-    bool _died, _dropped, _paused;
+    bool _died, _dropped, _paused, _stopped;
 
     /// <summary>Raised (polling thread, outside the lock) when a test started / was refused / finished.</summary>
     public event Action<ExpStartOutcome, string>? StartDecided;
@@ -228,6 +238,44 @@ public sealed class ExpTestRunner
         tcs?.TrySetResult(new ExpStartOutcome(ExpStartStatus.Refused, ExpTexts.Cancelled));
         return true;
     }
+
+    /// <summary>
+    /// Ends a running test now ("/exp stop"): the end time becomes <paramref name="now"/> and the
+    /// result is made exactly as at a normal end (the stable reading nearest that time, then
+    /// <see cref="Finished"/>), with the minutes actually measured. Under MinStopMinutes measured
+    /// (or still starting): dropped like a cancel. Minutes: the measured minutes (Stopping).
+    /// </summary>
+    public (ExpStopStatus Status, int Minutes) Stop(DateTime now)
+    {
+        TaskCompletionSource<ExpStartOutcome>? tcs = null;
+        (ExpStopStatus, int) r;
+        lock (_gate)
+        {
+            switch (_phase)
+            {
+                case ExpPhase.Idle: return (ExpStopStatus.NotRunning, 0);
+                case ExpPhase.Finishing: return (ExpStopStatus.AlreadyEnding, _minutes);
+                case ExpPhase.Running when now - _start!.Time >= TimeSpan.FromMinutes(MinStopMinutes):
+                    _stopped = true;
+                    _endAt = now;
+                    SetPhase(ExpPhase.Finishing);
+                    r = (ExpStopStatus.Stopping, MeasuredMinutes(now - _start.Time));
+                    break;
+                default:
+                    tcs = _phase == ExpPhase.Starting ? _startTcs : null;
+                    Clear();
+                    r = (ExpStopStatus.TooShort, 0);
+                    break;
+            }
+        }
+        tcs?.TrySetResult(new ExpStartOutcome(ExpStartStatus.Refused, ExpTexts.StopTooShort));
+        return r;
+    }
+
+    /// <summary>A stopped test shorter than this is dropped.</summary>
+    public const int MinStopMinutes = 1;
+
+    static int MeasuredMinutes(TimeSpan t) => Math.Max(MinStopMinutes, (int)Math.Round(t.TotalMinutes, MidpointRounding.AwayFromZero));
 
     /// <summary>Polling thread, after the HUD readers ran on this frame.</summary>
     public void OnFrame(Frame frame, HudScale scale, DateTime now, int? level, KillObservation kill, bool dead)
@@ -362,7 +410,9 @@ public sealed class ExpTestRunner
         MapCompare? map = end?.Map is { } em && start.Map is { } sm ? _mapReader.Compare(sm, em) : null;
         int? kills = _killPolls > 0 && _killVisible >= _c.KillVisibleMinFraction * _killPolls ? _killSum : null;
         var flags = new ExpFlags(end is not null && end.Level > start.Level, _died, _dropped, map is { Comparable: true, Why: "name" }, _paused);   // only the map NAME decides; zone moves inside a map are normal
-        var r = new ExpResult(start.Time.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture), _source, _minutes, start, end, kills, flags, map);
+        // Stopped early: the minutes actually measured (between the two readings, or up to the stop).
+        int minutes = _stopped ? MeasuredMinutes((end?.Time ?? _endAt) - start.Time) : _minutes;
+        var r = new ExpResult(start.Time.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture), _source, minutes, start, end, kills, flags, map) { Stopped = _stopped };
         Clear();
         return r;
     }
@@ -402,6 +452,6 @@ public sealed class ExpTestRunner
         _start = _candidate = null;
         _killRaw = _killLast = null;
         _killSum = _killPolls = _killVisible = 0;
-        _died = _dropped = _paused = false;
+        _died = _dropped = _paused = _stopped = false;
     }
 }

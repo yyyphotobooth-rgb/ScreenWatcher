@@ -12,6 +12,9 @@ public interface IExpTests
     Task<string> StartAsync(int minutes, string source);
     /// <summary>Cancels the test; the returned text is the Thai confirmation.</summary>
     string Cancel(string source);
+    /// <summary>Ends the running test now and reports the minutes measured (the result follows in
+    /// the channel); the returned text is the Thai reply.</summary>
+    string Stop(string source);
     /// <summary>The list image (null when there is nothing to list) and its text.</summary>
     (byte[]? Png, string Text) List();
 }
@@ -79,6 +82,27 @@ public sealed class ExpTestService : IExpTests, IDisposable
         return was ? ExpTexts.Cancelled : ExpTexts.NothingToCancel;
     }
 
+    public string Stop(string source)
+    {
+        var (status, minutes) = _runner.Stop(_clock());
+        _journal?.Write("exp_test", ("event", status switch
+        {
+            ExpStopStatus.Stopping => "stop",
+            ExpStopStatus.TooShort => "stop_short",
+            ExpStopStatus.AlreadyEnding => "stop_ending",
+            _ => "stop_none",
+        }), ("source", source), ("minutes", status == ExpStopStatus.Stopping ? minutes : null));
+        string text = status switch
+        {
+            ExpStopStatus.Stopping => ExpTexts.Stopping(minutes),
+            ExpStopStatus.TooShort => ExpTexts.StopTooShort,
+            ExpStopStatus.AlreadyEnding => ExpTexts.StopAlreadyEnding,
+            _ => ExpTexts.NothingToStop,
+        };
+        if (source != SourceDiscord && status is ExpStopStatus.Stopping or ExpStopStatus.TooShort) Send(text, null);
+        return text;
+    }
+
     public (byte[]? Png, string Text) List()
     {
         var rows = _store.LastComparable(_listCount);
@@ -103,7 +127,7 @@ public sealed class ExpTestService : IExpTests, IDisposable
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or ExternalException) { }
         _journal?.Write("exp_test", ("event", "result"), ("id", r.Id), ("source", r.Source), ("minutes", r.Minutes),
             ("start", r.Start.Text), ("end", r.End?.Text), ("gain", r.GainHundredths is { } g ? g / 100.0 : null),
-            ("kills", r.Kills), ("flags", r.Flags.Words().ToArray()), ("usable", r.Usable), ("comparable", r.Comparable),
+            ("kills", r.Kills), ("stopped", r.Stopped), ("flags", r.Flags.Words().ToArray()), ("usable", r.Usable), ("comparable", r.Comparable),
             ("map", r.Map is { } m ? $"{m.Why} {m.NameDiff}/{m.ZoneDiff}" : null), ("file", file is null ? null : Path.GetFileName(file)));
         Send(r.Text, png);
         try { ResultReady?.Invoke(r, file); } catch (Exception) { }
