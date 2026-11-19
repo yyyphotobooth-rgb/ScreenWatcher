@@ -66,7 +66,7 @@ public static class ExpTestImages
             if (r.End is { } e) blocks.Add(new($"จบ {T(e.Time)} · {e.Text}", Text, Bmp(e.LevelCrop), 0));
             else blocks.Add(new($"จบ · {ExpTexts.Unusable}", Warn, null, 0));
 
-            string title = $"ทดสอบ EXP · {r.Minutes} นาที · " + (r.GainHundredths is { } g ? $"ได้ {ExpTexts.SignedPct(g)}" : "ผลใช้ไม่ได้")
+            string title = $"ทดสอบ EXP · {r.Minutes} นาที · " + (r.GainHundredths is { } g ? $"ได้ {ExpTexts.SignedPct(g)}" + (r.RatePerMin is { } rt ? $" · เฉลี่ย {ExpMath.RateText(rt)}% ต่อนาที" : "") : "ผลใช้ไม่ได้")
                 + " · " + ExpTexts.Kills(r.Kills);
             string flags = string.Join(" · ", r.Flags.Words().Concat(r.Usable && r.Flags.NotComparable ? [ExpTexts.NotComparable] : []));
 
@@ -122,8 +122,11 @@ public static class ExpTestImages
         using var font = new Font(Family, 10f);
         using var bold = new Font(Family, 11f, FontStyle.Bold);
         const int mapW = 300, rowH = 64;
-        int[] col = [Pad, Pad + 30, Pad + 30 + mapW + 12, Pad + 30 + mapW + 12 + 130, Pad + 30 + mapW + 12 + 130 + 110, Pad + 30 + mapW + 12 + 130 + 110 + 90];
-        int w = col[5] + 300, headH = 30;
+        int[] widths = [30, mapW + 12, 130, 160, 130, 90];
+        int[] col = new int[7];
+        col[0] = Pad;
+        for (int k = 1; k < 7; k++) col[k] = col[k - 1] + widths[k - 1];
+        int w = col[6] + 300, headH = 30;
         int h = Pad + headH + rows.Count * rowH + Pad;
         using var bmp = new Bitmap(w, h, PixelFormat.Format32bppRgb);
         using var g = Graphics.FromImage(bmp);
@@ -136,7 +139,7 @@ public static class ExpTestImages
         using var good = new SolidBrush(Good);
         using var warn = new SolidBrush(Warn);
         using var line = new Pen(Color.FromArgb(45, 50, 58));
-        string[] heads = ["#", "แมป", "EXP / 10 นาที", "ยิงมอน", "เลเวล", "วันเวลา · หมายเหตุ"];
+        string[] heads = ["#", "แมป", "EXP ต่อนาที", "เวลาต่อ 1 เลเวล", "ยิงมอนต่อนาที", "เลเวล", "วันเวลา · ระยะ"];
         for (int k = 0; k < heads.Length; k++) g.DrawString(heads[k], font, muted, col[k], Pad + 4);
         int y = Pad + headH;
         for (int i = 0; i < rows.Count; i++, y += rowH)
@@ -153,12 +156,13 @@ public static class ExpTestImages
                 g.DrawImage(map, new Rectangle(col[1] + mapW - mw, y + (rowH - mh) / 2, mw, mh));
             }
             else g.DrawString("-", font, muted, col[1], y + 22);
-            g.DrawString(ExpTexts.SignedPct(r.Data.GainPer10Min ?? 0), bold, good, col[2], y + 20);
-            g.DrawString(r.Data.Kills is { } k ? $"{k} ตัว" : ExpTexts.KillsUnknown, font, text, col[3], y + 22);
+            g.DrawString(r.Data.RatePerMin is { } rate ? (rate < 0 ? "-" : "+") + ExpMath.RateText(Math.Abs(rate)) + "%" : "-", bold, good, col[2], y + 20);
+            g.DrawString(r.Data.MinutesPerLevel is { } per ? ExpMath.Duration(per) : "-", font, text, col[3], y + 22);
+            g.DrawString(r.Data.KillsPerMin is { } q ? ExpTexts.KillsPerMin(q) : ExpTexts.KillsUnknown, font, text, col[4], y + 22);
             string lv = r.Data.EndLevel is { } el && el != r.Data.StartLevel ? $"Lv.{r.Data.StartLevel}→{el}" : $"Lv.{r.Data.StartLevel}";
-            g.DrawString(lv, font, text, col[4], y + 22);
-            g.DrawString($"{r.Data.StartTime.ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)} · {r.Data.Minutes} นาที", font, text, col[5], y + 12);
-            if (r.Data.Flags.Length > 0) g.DrawString(string.Join(" · ", r.Data.Flags), font, warn, col[5], y + 34);
+            g.DrawString(lv, font, text, col[5], y + 22);
+            g.DrawString($"{r.Data.StartTime.ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)} · {r.Data.Minutes} นาที", font, text, col[6], y + 12);
+            if (r.Data.ShownFlags.Length > 0) g.DrawString(string.Join(" · ", r.Data.ShownFlags), font, warn, col[6], y + 34);
         }
         return Png(bmp);
     }

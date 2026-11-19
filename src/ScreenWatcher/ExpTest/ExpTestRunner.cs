@@ -45,8 +45,18 @@ public sealed record ExpResult(string Id, string Source, int Minutes, ExpReading
     /// <summary>Minutes between the two readings actually used.</summary>
     public double ElapsedMinutes => End is { } e ? (e.Time - Start.Time).TotalMinutes : 0;
 
-    /// <summary>Gain per 10 minutes (hundredths), normalised by the elapsed time between the readings.</summary>
+    /// <summary>Gain per minute in percent (gain / minutes actually measured between the two readings).</summary>
+    public double? RatePerMin => GainHundredths is { } g ? ExpMath.Rate(g, ElapsedMinutes) : null;
+
+    /// <summary>Kills per minute over the measured minutes (null when kills or time are unknown).</summary>
+    public double? KillsPerMin => Kills is { } k && ElapsedMinutes > 0 ? k / ElapsedMinutes : null;
+
+    /// <summary>Gain per 10 minutes (hundredths). Kept only for the stored file; never shown or sorted on.</summary>
     public double? GainPer10Min => GainHundredths is { } g && ElapsedMinutes > 0 ? g * 10.0 / ElapsedMinutes : null;
+
+    /// <summary>Minutes for a whole level / until the next one; null when not meaningful (see <see cref="ExpMath"/>).</summary>
+    public int? MinutesPerLevel => RatePerMin is { } r && !Flags.LevelUp ? ExpMath.MinutesPerLevel(r) : null;
+    public int? MinutesLeft => RatePerMin is { } r && End is { } e && !Flags.LevelUp ? ExpMath.MinutesLeft(r, e.PctHundredths) : null;
 
     public string Text => ExpTexts.Result(this);
 }
@@ -77,16 +87,51 @@ public static class ExpTexts
 
     public static string Kills(int? kills) => kills is { } k ? $"ยิงมอน {k} ตัว" : $"ยิงมอน {KillsUnknown}";
 
+    public static string KillsPerMin(double q) => q.ToString("0.0", CultureInfo.InvariantCulture);
+
     public static string Result(ExpResult r)
     {
-        var parts = new List<string> { $"ทดสอบ EXP จบ · {r.Minutes} นาที" };
-        if (r.End is { } e) parts.Add($"ได้ {SignedPct(r.GainHundredths!.Value)} ({r.Start.Text} → {e.Text})");
-        else parts.Add($"{Unusable} (เริ่ม {r.Start.Text})");
-        parts.Add(Kills(r.Kills));
-        parts.AddRange(r.Flags.Words());
-        if (r.Usable && r.Flags.NotComparable) parts.Add(NotComparable);
-        return string.Join(" · ", parts);
+        var lines = new List<string> { $"ทดสอบ EXP จบ · {r.Minutes} นาที" };
+        if (r.End is { } e)
+        {
+            lines.Add($"ได้ {SignedPct(r.GainHundredths!.Value)} ({r.Start.Text} → {e.Text})");
+            if (r.RatePerMin is { } rate)
+            {
+                lines.Add($"เฉลี่ย {ExpMath.RateText(rate)}% ต่อนาที");
+                if (r.MinutesPerLevel is { } per) lines.Add($"เวลาต่อ 1 เลเวล (Lv.{e.Level}): ราว {ExpMath.Duration(per)}");
+                if (r.MinutesLeft is { } left) lines.Add($"เหลืออีกราว {ExpMath.Duration(left)} จะเลเวลอัพ");
+            }
+        }
+        else lines.Add($"{Unusable} (เริ่ม {r.Start.Text})");
+        lines.Add(r.Kills is { } k
+            ? r.KillsPerMin is { } q ? $"ยิงมอน {k} ตัว · {KillsPerMin(q)} ตัวต่อนาที" : $"ยิงมอน {k} ตัว"
+            : $"ยิงมอน {KillsUnknown}");
+        var flags = r.Flags.Words().ToList();
+        if (r.Usable && r.Flags.NotComparable) flags.Add(NotComparable);
+        if (flags.Count > 0) lines.Add(string.Join(" · ", flags));
+        return string.Join("\n", lines);
     }
+}
+
+/// <summary>Rate and time maths shared by the message, the images and the stored results.</summary>
+public static class ExpMath
+{
+    /// <summary>Percent per minute; null when no time passed.</summary>
+    public static double? Rate(double gainHundredths, double minutes) => minutes > 0 ? gainHundredths / 100.0 / minutes : null;
+
+    static int Round(double minutes) => (int)Math.Round(minutes, MidpointRounding.AwayFromZero);
+
+    /// <summary>100 / R rounded to minutes; null when R is zero or negative.</summary>
+    public static int? MinutesPerLevel(double rate) => rate > 0 ? Round(100.0 / rate) : null;
+
+    /// <summary>(100 - P2) / R rounded to minutes; null when R is zero or negative.</summary>
+    public static int? MinutesLeft(double rate, int endPctHundredths) => rate > 0 ? Round(Math.Max(0, 100.0 - endPctHundredths / 100.0) / rate) : null;
+
+    /// <summary>"H ชม. M นาที", or "M นาที" under one hour.</summary>
+    public static string Duration(int minutes) => minutes >= 60 ? $"{minutes / 60} ชม. {minutes % 60} นาที" : $"{minutes} นาที";
+
+    /// <summary>2 decimals, 3 when below 0.10.</summary>
+    public static string RateText(double rate) => rate.ToString(Math.Abs(rate) < 0.10 ? "0.000" : "0.00", CultureInfo.InvariantCulture);
 }
 
 /// <summary>What happened to a start request.</summary>
@@ -316,7 +361,7 @@ public sealed class ExpTestRunner
         var start = _start!;
         MapCompare? map = end?.Map is { } em && start.Map is { } sm ? _mapReader.Compare(sm, em) : null;
         int? kills = _killPolls > 0 && _killVisible >= _c.KillVisibleMinFraction * _killPolls ? _killSum : null;
-        var flags = new ExpFlags(end is not null && end.Level > start.Level, _died, _dropped, map is { Changed: true }, _paused);
+        var flags = new ExpFlags(end is not null && end.Level > start.Level, _died, _dropped, map is { Comparable: true, Why: "name" }, _paused);   // only the map NAME decides; zone moves inside a map are normal
         var r = new ExpResult(start.Time.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture), _source, _minutes, start, end, kills, flags, map);
         Clear();
         return r;

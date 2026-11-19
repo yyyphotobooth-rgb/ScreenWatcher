@@ -130,7 +130,7 @@ public class ExpTestTests(ITestOutputHelper output)
         g.Poll(88, 5200, polls: 4);                         // stable at end-1 (61 s) and end (62 s)
         var r = Assert.Single(g.Results);
         Assert.Equal(139, r.GainHundredths);
-        Assert.Equal("ทดสอบ EXP จบ · 1 นาที · ได้ +1.39% (Lv.88 50.61% → Lv.88 52.00%) · ยิงมอน ไม่ทราบ", r.Text);
+        Assert.Equal("ทดสอบ EXP จบ · 1 นาที\nได้ +1.39% (Lv.88 50.61% → Lv.88 52.00%)\nเฉลี่ย 1.39% ต่อนาที\nเวลาต่อ 1 เลเวล (Lv.88): ราว 1 ชม. 12 นาที\nเหลืออีกราว 35 นาที จะเลเวลอัพ\nยิงมอน ไม่ทราบ", r.Text);
         Assert.True(r.Comparable);
         Assert.Equal(ExpPhase.Idle, g.R.Phase);
     }
@@ -148,7 +148,9 @@ public class ExpTestTests(ITestOutputHelper output)
         var r = Assert.Single(g.Results);
         Assert.Equal(100, r.GainHundredths);
         Assert.True(r.Flags.LevelUp);
-        Assert.Contains("· มีเลเวลอัพ", r.Text);
+        Assert.Contains("\nมีเลเวลอัพ", r.Text);
+        Assert.DoesNotContain("เวลาต่อ 1 เลเวล", r.Text);   // no time lines after a level-up
+        Assert.DoesNotContain("จะเลเวลอัพ", r.Text);
         Assert.True(r.Comparable);                          // a level-up alone does not stop comparing
     }
 
@@ -196,7 +198,7 @@ public class ExpTestTests(ITestOutputHelper output)
         var r = Assert.Single(g.Results);
         Assert.False(r.Usable);
         Assert.Null(r.GainHundredths);
-        Assert.Equal("ทดสอบ EXP จบ · 1 นาที · ผลใช้ไม่ได้ อ่านค่า EXP ตอนจบไม่ได้ (เริ่ม Lv.88 50.61%) · ยิงมอน ไม่ทราบ", r.Text);
+        Assert.Equal("ทดสอบ EXP จบ · 1 นาที\nผลใช้ไม่ได้ อ่านค่า EXP ตอนจบไม่ได้ (เริ่ม Lv.88 50.61%)\nยิงมอน ไม่ทราบ", r.Text);
         Assert.DoesNotContain("ได้ +", r.Text);
     }
 
@@ -296,7 +298,7 @@ public class ExpTestTests(ITestOutputHelper output)
         var r = Assert.Single(g.Results);
         Assert.True(r.Flags.Died);
         Assert.True(r.Comparable);
-        Assert.EndsWith("· ตายระหว่างทดสอบ", r.Text);
+        Assert.EndsWith("\nตายระหว่างทดสอบ", r.Text);
 
         g = new Rig();
         _ = g.Start(1);
@@ -306,18 +308,28 @@ public class ExpTestTests(ITestOutputHelper output)
         g.Poll(88, 5100, polls: 60);
         r = Assert.Single(g.Results);
         Assert.False(r.Comparable);
-        Assert.EndsWith("· เกมหลุด · หยุดเฝ้าระหว่างทดสอบ · ใช้เทียบไม่ได้", r.Text);
+        Assert.EndsWith("\nเกมหลุด · หยุดเฝ้าระหว่างทดสอบ · ใช้เทียบไม่ได้", r.Text);
     }
 
     [Fact]
-    public void Map_change_between_start_and_end_is_flagged_and_same_label_is_not()
+    public void Map_name_change_is_flagged_but_a_zone_change_alone_and_same_label_are_not()
     {
-        var g = new Rig { StartMap = Label(Inventory), EndMap = Label(Live1) };   // โซน 8 -> โซน 4
+        var g = new Rig { StartMap = Label(Inventory), EndMap = Label(Town) };    // Daisy -> เมืองไบเจนิว
         _ = g.Start(1);
         g.Poll(88, 5000, polls: 64);
         var r = Assert.Single(g.Results);
         Assert.True(r.Flags.MapChanged);
-        Assert.EndsWith("· เปลี่ยนแมป · ใช้เทียบไม่ได้", r.Text);
+        Assert.False(r.Comparable);
+        Assert.EndsWith("\nเปลี่ยนแมป · ใช้เทียบไม่ได้", r.Text);
+
+        g = new Rig { StartMap = Label(Inventory), EndMap = Label(Live1) };       // same map, โซน 8 -> โซน 4
+        _ = g.Start(1);
+        g.Poll(88, 5000, polls: 64);
+        r = Assert.Single(g.Results);
+        Assert.Equal("zone", r.Map!.Value.Why);
+        Assert.False(r.Flags.MapChanged);
+        Assert.True(r.Comparable);
+        Assert.DoesNotContain("เปลี่ยนแมป", r.Text);
 
         g = new Rig { StartMap = Label(Live1), EndMap = Label(SmallA) };          // โซน 4 over other scenery
         _ = g.Start(1);
@@ -378,7 +390,7 @@ public class ExpTestTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Store_lists_the_last_comparable_results_by_gain_per_10_minutes()
+    public void Store_lists_the_last_comparable_results_by_exp_per_minute()
     {
         string root = Path.Combine(Path.GetTempPath(), "sw-exp-" + Guid.NewGuid().ToString("N"));
         try
@@ -392,13 +404,84 @@ public class ExpTestTests(ITestOutputHelper output)
             store.Save(Result("5", T0.AddHours(4), 10, 5000, 9000, paused: true, map: map), [1]);       // not comparable
             var rows = store.LastComparable(10);
             Assert.Equal(["2", "3", "1"], rows.Select(r => r.Data.Id));
-            Assert.Equal(200, rows[0].Data.GainPer10Min!.Value, 6);
+            Assert.Equal(0.2, rows[0].Data.RatePerMin!.Value, 6);
+            Assert.Equal(500, rows[0].Data.MinutesPerLevel);                          // 100 / 0.2
             Assert.All(rows, r => Assert.NotNull(r.MapPng));
             Assert.Equal(["2", "3"], store.LastComparable(2).Select(r => r.Data.Id));   // the last two by time
             using var img = new Bitmap(new MemoryStream(ExpTestImages.List(rows)));
             using var one = new Bitmap(new MemoryStream(ExpTestImages.List(rows.Take(1).ToList())));
             Assert.Equal(2 * 64, img.Height - one.Height);
+            Assert.True(img.Width >= 12 + 30 + 312 + 130 + 160 + 130 + 90 + 300);      // seven columns
             Assert.True(File.Exists(Path.Combine(root, "1.json")) && File.Exists(Path.Combine(root, "1.png")) && File.Exists(Path.Combine(root, "1_map.png")));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void Rate_time_per_level_and_time_left_maths_with_rounding_and_omit_cases()
+    {
+        Assert.Equal(1.0, ExpMath.Rate(1000, 10)!.Value, 9);
+        Assert.Null(ExpMath.Rate(100, 0));
+        Assert.Equal("1.37", ExpMath.RateText(1.3672));
+        Assert.Equal("0.050", ExpMath.RateText(0.05));
+        Assert.Equal("0.10", ExpMath.RateText(0.10));
+        Assert.Equal(100, ExpMath.MinutesPerLevel(1.0));
+        Assert.Equal(73, ExpMath.MinutesPerLevel(1.3672));          // 73.14
+        Assert.Equal(74, ExpMath.MinutesPerLevel(100 / 73.5));      // 73.5 rounds up
+        Assert.Equal(35, ExpMath.MinutesLeft(1.3672, 5200));        // 48 / 1.3672 = 35.1
+        Assert.Equal(0, ExpMath.MinutesLeft(1.0, 10000));
+        Assert.Null(ExpMath.MinutesPerLevel(0));
+        Assert.Null(ExpMath.MinutesLeft(-0.5, 5000));
+        Assert.Equal("45 นาที", ExpMath.Duration(45));
+        Assert.Equal("1 ชม. 0 นาที", ExpMath.Duration(60));
+        Assert.Equal("2 ชม. 5 นาที", ExpMath.Duration(125));
+
+        var g = new Rig();                                          // zero gain: rate shown, both time lines omitted
+        _ = g.Start(1);
+        g.Poll(88, 5000, polls: 64);
+        var r = Assert.Single(g.Results);
+        Assert.Equal("ทดสอบ EXP จบ · 1 นาที\nได้ +0.00% (Lv.88 50.00% → Lv.88 50.00%)\nเฉลี่ย 0.000% ต่อนาที\nยิงมอน ไม่ทราบ", r.Text);
+    }
+
+    [Fact]
+    public void Result_message_with_kills_has_the_kill_rate_and_a_flag_line()
+    {
+        var r = Result("k", T0, 10, 5000, 5100, kills: 50, paused: true);
+        Assert.Equal("ทดสอบ EXP จบ · 10 นาที\nได้ +1.00% (Lv.88 50.00% → Lv.88 51.00%)\nเฉลี่ย 0.10% ต่อนาที\nเวลาต่อ 1 เลเวล (Lv.88): ราว 16 ชม. 40 นาที\nเหลืออีกราว 8 ชม. 10 นาที จะเลเวลอัพ\nยิงมอน 50 ตัว · 5.0 ตัวต่อนาที\nหยุดเฝ้าระหว่างทดสอบ · ใช้เทียบไม่ได้", r.Text);
+    }
+
+    [Fact]
+    public void Old_saved_results_still_load_and_display_in_the_list()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "sw-exp-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            // The old format: per-10-minute field, one-line text, a zone-only map change stored as not comparable.
+            File.WriteAllText(Path.Combine(root, "old1.json"), """
+                {"Id":"old1","Source":"button","Minutes":10,"StartTime":"2026-11-19T14:00:00","StartLevel":88,"StartPct":5000,
+                 "EndTime":"2026-11-19T14:10:00","EndLevel":88,"EndPct":5300,"GainHundredths":300,"GainPer10Min":300.0,"Kills":40,
+                 "Flags":[],"Usable":true,"Comparable":true,"MapCompare":"same name 0 zone 0","Text":"x"}
+                """);
+            File.WriteAllText(Path.Combine(root, "old2.json"), """
+                {"Id":"old2","Source":"button","Minutes":10,"StartTime":"2026-11-19T15:00:00","StartLevel":88,"StartPct":5000,
+                 "EndTime":"2026-11-19T15:10:00","EndLevel":88,"EndPct":5100,"GainHundredths":100,"GainPer10Min":100.0,"Kills":null,
+                 "Flags":["เปลี่ยนแมป"],"Usable":true,"Comparable":false,"MapCompare":"zone name 0 zone 99","Text":"x"}
+                """);
+            File.WriteAllText(Path.Combine(root, "old3.json"), """
+                {"Id":"old3","Source":"button","Minutes":10,"StartTime":"2026-11-19T16:00:00","StartLevel":88,"StartPct":5000,
+                 "EndTime":"2026-11-19T16:10:00","EndLevel":88,"EndPct":9000,"GainHundredths":4000,"GainPer10Min":4000.0,"Kills":1,
+                 "Flags":["เปลี่ยนแมป"],"Usable":true,"Comparable":false,"MapCompare":"name name 80 zone 0","Text":"x"}
+                """);
+            var store = new ExpTestStore(root);
+            var rows = store.LastComparable(10);
+            Assert.Equal(["old1", "old2"], rows.Select(r => r.Data.Id));         // 0.30 / min, then 0.10; old3 changed the map name
+            Assert.Equal(0.3, rows[0].Data.RatePerMin!.Value, 6);
+            Assert.Equal(333, rows[0].Data.MinutesPerLevel);                      // 100 / 0.3 = 333.3
+            Assert.Equal(4.0, rows[0].Data.KillsPerMin!.Value, 6);
+            Assert.Null(rows[1].Data.KillsPerMin);
+            using var img = new Bitmap(new MemoryStream(ExpTestImages.List(rows)));
+            Assert.True(img.Width > 500);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
@@ -486,7 +569,7 @@ public class ExpTestTests(ITestOutputHelper output)
         g.Poll(125);
         var m = Assert.Single(g.Sent);
         Assert.Equal(ExpTestService.AlertId, m.AlertId);
-        Assert.StartsWith("ทดสอบ EXP จบ · 2 นาที · ได้ +1.20% (Lv.88 50.01% → Lv.88 51.21%)", m.Text);
+        Assert.StartsWith("ทดสอบ EXP จบ · 2 นาที\nได้ +1.20% (Lv.88 50.01% → Lv.88 51.21%)\nเฉลี่ย ", m.Text);
         Assert.NotNull(m.Png);
         Assert.True(File.Exists(Path.Combine(g.Root, "20261119_140001.json")));
 

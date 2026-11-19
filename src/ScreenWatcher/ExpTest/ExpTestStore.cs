@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ScreenWatcher.Imaging;
 
 namespace ScreenWatcher.ExpTest;
@@ -10,6 +11,23 @@ public sealed record ExpRecord(
     DateTime? EndTime, int? EndLevel, int? EndPct, int? GainHundredths, double? GainPer10Min, int? Kills,
     string[] Flags, bool Usable, bool Comparable, string? MapCompare, string Text)
 {
+    // Derived values: results saved before the per-minute change (and the zone rule) load and display too.
+    [JsonIgnore] public double? Elapsed => EndTime is { } e ? (e - StartTime).TotalMinutes : null;
+    [JsonIgnore] public bool LevelUp => Flags.Contains("มีเลเวลอัพ");
+    [JsonIgnore] public double? RatePerMin => GainHundredths is { } g && Elapsed is { } m ? ExpMath.Rate(g, m) : null;
+    [JsonIgnore] public double? KillsPerMin => Kills is { } k && Elapsed is { } m && m > 0 ? k / m : null;
+    [JsonIgnore] public int? MinutesPerLevel => RatePerMin is { } r && !LevelUp ? ExpMath.MinutesPerLevel(r) : null;
+
+    /// <summary>Comparable by the current rules: a map change counts only when it was the NAME (an old
+    /// record whose only difference was the zone counts as comparable).</summary>
+    [JsonIgnore]
+    public bool ComparableNow => Usable && !Flags.Contains("เกมหลุด") && !Flags.Contains("หยุดเฝ้าระหว่างทดสอบ")
+        && !(Flags.Contains("เปลี่ยนแมป") && MapCompare?.StartsWith("zone ", StringComparison.Ordinal) != true);
+
+    /// <summary>Flags to show: an old "map changed" caused by the zone alone is no longer a flag.</summary>
+    [JsonIgnore]
+    public string[] ShownFlags => [.. Flags.Where(f => f != "เปลี่ยนแมป" || MapCompare?.StartsWith("zone ", StringComparison.Ordinal) != true)];
+
     public static ExpRecord From(ExpResult r) => new(
         r.Id, r.Source, r.Minutes, r.Start.Time, r.Start.Level, r.Start.PctHundredths,
         r.End?.Time, r.End?.Level, r.End?.PctHundredths, r.GainHundredths, r.GainPer10Min, r.Kills,
@@ -59,12 +77,12 @@ public sealed class ExpTestStore(string root)
         return list;
     }
 
-    /// <summary>The last <paramref name="count"/> comparable results (by start time), sorted by gain
-    /// per 10 minutes, best first.</summary>
+    /// <summary>The last <paramref name="count"/> comparable results (by start time), sorted by EXP per
+    /// minute, best first.</summary>
     public IReadOnlyList<ExpListRow> LastComparable(int count) =>
-        [.. LoadAll().Where(r => r.Comparable && r.GainPer10Min is not null)
+        [.. LoadAll().Where(r => r.ComparableNow && r.RatePerMin is not null)
             .OrderByDescending(r => r.StartTime).Take(count)
-            .OrderByDescending(r => r.GainPer10Min)
+            .OrderByDescending(r => r.RatePerMin)
             .Select(r => new ExpListRow(r, ReadMap(r.Id)))];
 
     byte[]? ReadMap(string id)
