@@ -30,7 +30,7 @@ public static class HudTestData
     /// </summary>
     public static Frame RegionFrame(string cropPath, string region, double up = 1)
     {
-        var rc = new CollectRegion(TestData.Config.Collect.Regions.First(r => r.Name == region));
+        var rc = new CollectRegion(TestData.Config.Collect.AllRegions.First(r => r.Name == region));
         int w = (int)Math.Round(1024 * up), h = (int)Math.Round(768 * up);
         var rect = rc.Locate(w, h, new HudScale(up, up));
         using var crop = new Bitmap(cropPath);

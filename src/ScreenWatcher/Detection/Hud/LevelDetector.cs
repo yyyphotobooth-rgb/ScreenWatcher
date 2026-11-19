@@ -39,6 +39,7 @@ public sealed class LevelReader
     readonly Dictionary<string, int> _lKeys = new();
     readonly HashSet<string> _pctKeys = new();
     readonly int[] _lWidths, _splitWidths;
+    readonly Dictionary<string, int> _cutDigits;
     char[] _key = [];
 
     public LevelReader(LevelConfig config)
@@ -52,8 +53,26 @@ public sealed class LevelReader
         }
         static int Width(string key) => key.IndexOf('/') < 0 ? key.Length : key.IndexOf('/');
         _lWidths = [.. _lKeys.Keys.Select(Width).Distinct()];
+        // Digits whose last column is a single pixel (Tahoma 9/10 "4": the crossbar's end) also
+        // without that column: the game draws the line glyph by glyph with a black outline, and
+        // the next glyph's outline paints over that pixel when the next glyph starts right after
+        // it with ink on that row (live 2026-11-19 18:22..18:34, "47.40%".."48.99%", "4" before
+        // 0/4/6/8). Only taken when the next glyph follows after exactly that one blank column.
+        var cut = new Dictionary<string, int>();
+        var clash = new HashSet<string>();
+        foreach (var (key, d) in _font.Digits)
+        {
+            var rows = key.Split('/');
+            int w = rows[0].Length;
+            if (w < 2 || rows.Count(r => r[w - 1] == '#') != 1 || rows.All(r => r[w - 2] != '#')) continue;
+            string k = string.Join("/", rows.Select(r => r[..(w - 1)]));
+            if (_font.Digits.ContainsKey(k) || (cut.TryGetValue(k, out int other) && other != d)) clash.Add(k);
+            else cut[k] = d;
+        }
+        foreach (var k in clash) cut.Remove(k);
+        _cutDigits = cut;
         // Piece widths tried when touching glyphs are split: the dot, every digit, the "%".
-        _splitWidths = [.. new[] { 1 }.Concat(_font.Digits.Keys.Select(Width)).Concat(_pctKeys.Select(Width)).Distinct().Order()];
+        _splitWidths = [.. new[] { 1 }.Concat(_font.Digits.Keys.Select(Width)).Concat(_cutDigits.Keys.Select(Width)).Concat(_pctKeys.Select(Width)).Distinct().Order()];
         if (config.Prefix.Length != GlyphH) throw new InvalidDataException("level: prefix must have 7 rows");
         _prefixW = config.Prefix[0].Length;
         _prefix = Parse(config.Prefix, _prefixW);
@@ -124,24 +143,42 @@ public sealed class LevelReader
         if (aw <= 0 || ah <= 0) return (0, 0);
         if (_ink.Length < aw * ah) _ink = new bool[aw * ah];
         _ah = ah;
+        _bandTop = 0;
+        _bandBottom = ah - 1;
         var px = f.Pixels;
         for (int y = 0; y < ah; y++)
         {
-            int i = ((area.Y + y) * f.Width + area.X) * 4;
-            for (int x = 0; x < aw; x++, i += 4) _ink[y * aw + x] = Ink(px, i);
+            int i = ((area.Y + y) * f.Width + area.X) * 4, count = 0;
+            for (int x = 0; x < aw; x++, i += 4) if (_ink[y * aw + x] = Ink(px, i)) count++;
+            // A row more than half ink is not text: the exp bar's top edge, light grey over some
+            // scenery (live 2026-11-19 18:32, 18:33, the row just above the text).
+            if (count * 2 > aw) Array.Clear(_ink, y * aw, aw);
         }
         return (aw, ah);
     }
+
+    // Rows that decide whether a column belongs to the text: the whole area until the "L" is found,
+    // then only the L's rows. The exp bar's top edge (the row just above the text) can show a stray
+    // light-grey pixel; in a column that is blank on the text rows (a gap between glyphs) it glued
+    // the two glyphs into one run (live 2026-11-19 18:31:31, "48.25%": pixel between "." and "2").
+    // Such a column is now a gap. Ink stacked on a glyph's own columns still counts (the glyph's
+    // rows are taken over the whole area), so that glyph stays unreadable rather than guessed.
+    int _bandTop, _bandBottom;
+
+    void Band(int top, int bottom) => (_bandTop, _bandBottom) = (top, bottom);
 
     /// <summary>Next run of ink columns from column x (inclusive); false when none is left.</summary>
     bool NextSegment(int aw, int ah, ref int x, out int x0, out int x1, out int y0, out int y1)
     {
         x0 = x1 = y0 = y1 = -1;
+        int yA = Math.Max(0, _bandTop), yB = Math.Min(ah - 1, _bandBottom);
         for (; x < aw; x++)
         {
+            bool text = false;
+            for (int y = yA; y <= yB && !text; y++) text = _ink[y * aw + x];
+            if (!text) { if (x0 >= 0) { x1 = x - 1; return true; } continue; }
             int top = -1, bottom = -1;
             for (int y = 0; y < ah; y++) if (_ink[y * aw + x]) { if (top < 0) top = y; bottom = y; }
-            if (top < 0) { if (x0 >= 0) { x1 = x - 1; return true; } continue; }
             if (x0 < 0) { x0 = x; y0 = top; y1 = bottom; }
             else { y0 = Math.Min(y0, top); y1 = Math.Max(y1, bottom); }
         }
@@ -171,15 +208,25 @@ public sealed class LevelReader
         if (aw == 0) return null;
         var lLookup = _lKeys.GetAlternateLookup<ReadOnlySpan<char>>();
         var dLookup = _font.Digits.GetAlternateLookup<ReadOnlySpan<char>>();
+        var cLookup = _cutDigits.GetAlternateLookup<ReadOnlySpan<char>>();
         int x = 0;
-        // 1. The "L": its rows are the digits' rows.
+        // 1. The "L": its rows are the digits' rows. At 10 px the L's foot touches the "v": then
+        // the L is the first columns of that segment (same rule as the percentage pass).
         int top = -1, bottom = -1, prevEnd = -1;
-        while (NextSegment(aw, ah, ref x, out int s0, out int s1, out int t0, out int t1))
-            if (lLookup.ContainsKey(Key(aw, s0, s1, t0, t1))) { top = t0; bottom = t1; prevEnd = s1; break; }
+        bool glued = false;
+        while (top < 0 && NextSegment(aw, ah, ref x, out int s0, out int s1, out int t0, out int t1))
+        {
+            if (lLookup.ContainsKey(Key(aw, s0, s1, t0, t1))) { top = t0; bottom = t1; break; }
+            foreach (int w in _lWidths)
+                if (s1 - s0 + 1 > w && Rows(aw, ah, s0, s0 + w - 1, out int u0, out int u1) && lLookup.ContainsKey(Key(aw, s0, s0 + w - 1, u0, u1)))
+                { top = u0; bottom = u1; glued = true; break; }
+        }
         if (top < 0) return null;
-        // 2. "v" then ".": a 1-column segment ending on the digits' bottom row, within the next two.
+        Band(top, bottom);
+        // 2. "v" then ".": a 1-column segment ending on the digits' bottom row, within the next two
+        // (the next one when the v was glued to the L).
         bool dot = false;
-        for (int k = 0; k < 2 && !dot; k++)
+        for (int k = 0; k < (glued ? 1 : 2) && !dot; k++)
         {
             if (!NextSegment(aw, ah, ref x, out int s0, out int s1, out int t0, out int t1)) return null;
             dot = s1 == s0 && t1 == bottom && t0 > top;
@@ -187,15 +234,24 @@ public sealed class LevelReader
         }
         if (!dot) return null;
         // 3. Digits: full height, adjacent (at most MaxDigitGap blank columns), up to MaxDigits.
+        // A digit missing its last column (see _cutDigits) needs the next digit after exactly one blank column.
         int value = 0, digits = 0;
+        bool cutPending = false;
         while (digits < _c.MaxDigits && NextSegment(aw, ah, ref x, out int s0, out int s1, out int t0, out int t1))
         {
-            if (digits > 0 && s0 - prevEnd - 1 > _c.MaxDigitGap) break;   // the space before the percentage
-            if (t0 != top || t1 != bottom || !dLookup.TryGetValue(Key(aw, s0, s1, t0, t1), out int d)) return null;   // something else glued to the number
+            int gap = s0 - prevEnd - 1;
+            if (cutPending && gap != 1) return null;
+            if (digits > 0 && gap > _c.MaxDigitGap) break;   // the space before the percentage
+            if (t0 != top || t1 != bottom) return null;   // something else glued to the number
+            var key = Key(aw, s0, s1, t0, t1);
+            if (dLookup.TryGetValue(key, out int d)) cutPending = false;
+            else if (cLookup.TryGetValue(key, out d)) cutPending = true;
+            else return null;
             value = value * 10 + d;
             digits++;
             prevEnd = s1;
         }
+        if (cutPending) return null;
         return digits == 0 ? null : value;
     }
 
@@ -233,6 +289,7 @@ public sealed class LevelReader
                 { top = u0; bottom = u1; glued = true; break; }
         }
         if (top < 0) return null;
+        Band(top, bottom);
         // "v" then "." (or only "." when the v was glued to the L).
         bool dot = false;
         int prevEnd = -1;
@@ -252,6 +309,10 @@ public sealed class LevelReader
             _tokens[first] = _tokens[first] with { Gap = s0 - prevEnd - 1 };
             prevEnd = s1;
         }
+        // A digit missing its last column (see _cutDigits) counts only when the next glyph follows
+        // after exactly one blank column (the painted-over one); otherwise the line ends there.
+        for (int k = 0; k < _tokens.Count; k++)
+            if (_tokens[k].Cut && (k + 1 >= _tokens.Count || _tokens[k + 1].Gap != 1)) { _tokens.RemoveRange(k, _tokens.Count - k); break; }
         int i = 0, n = _tokens.Count, gap = _c.MaxDigitGap;
         bool Next(out char c, out int g)
         {
@@ -290,17 +351,17 @@ public sealed class LevelReader
         return value <= 10000 ? value : null;
     }
 
-    readonly record struct Token(char C, int X0, int X1, int Gap);
+    readonly record struct Token(char C, int X0, int X1, int Gap, bool Cut = false);
     readonly List<Token> _tokens = new(16);
 
     /// <summary>Columns c0..c1 (touching ink) as glyphs appended to _tokens; false (nothing added)
     /// when they cannot be split into exact glyphs.</summary>
     bool Tokenize(int aw, int ah, int c0, int c1, int top, int bottom)
     {
-        if (GlyphAt(aw, ah, c0, c1, top, bottom) is { } whole) { _tokens.Add(new Token(whole, c0, c1, 0)); return true; }
+        if (GlyphAt(aw, ah, c0, c1, top, bottom, true, out bool cut) is { } whole) { _tokens.Add(new Token(whole, c0, c1, 0, cut)); return true; }
         foreach (int w in _splitWidths)
         {
-            if (w >= c1 - c0 + 1 || GlyphAt(aw, ah, c0, c0 + w - 1, top, bottom) is not { } g) continue;
+            if (w >= c1 - c0 + 1 || GlyphAt(aw, ah, c0, c0 + w - 1, top, bottom, false, out _) is not { } g) continue;
             int count = _tokens.Count;
             _tokens.Add(new Token(g, c0, c0 + w - 1, 0));
             if (Tokenize(aw, ah, c0 + w, c1, top, bottom)) return true;
@@ -310,13 +371,16 @@ public sealed class LevelReader
     }
 
     /// <summary>The glyph exactly filling columns c0..c1: a digit (on the digit rows), "%", or the
-    /// dot (one column ending on the digits' bottom row); null otherwise.</summary>
-    char? GlyphAt(int aw, int ah, int c0, int c1, int top, int bottom)
+    /// dot (one column ending on the digits' bottom row); null otherwise. <paramref name="segmentEnd"/>:
+    /// c1 ends a run of ink, so a digit missing its last column (<paramref name="cut"/>) may be there.</summary>
+    char? GlyphAt(int aw, int ah, int c0, int c1, int top, int bottom, bool segmentEnd, out bool cut)
     {
+        cut = false;
         if (!Rows(aw, ah, c0, c1, out int t0, out int t1)) return null;
         if (c0 == c1 && t1 == bottom && t0 > top && t1 - t0 <= 2) return '.';
         var key = Key(aw, c0, c1, t0, t1);
         if (t0 == top && t1 == bottom && _font.Digits.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(key, out int d)) return (char)('0' + d);
+        if (segmentEnd && t0 == top && t1 == bottom && _cutDigits.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(key, out d)) { cut = true; return (char)('0' + d); }
         if (_pctKeys.GetAlternateLookup<ReadOnlySpan<char>>().Contains(key)) return '%';
         return null;
     }
