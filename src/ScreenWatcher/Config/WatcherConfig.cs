@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel)
 {
     public const string FileName = "detectors.json";
 
@@ -179,3 +179,19 @@ public sealed record AutoCollectConfig(
 /// after the first row other rows may join the same message, the message ({0} = short names) and
 /// the watched rows in table order as [alert row id, short name].</summary>
 public sealed record UnreadableConfig(int DefaultSeconds, double CombineSeconds, string Message, string[][] Rows);
+
+/// <summary>Level-up quest panel (Detection/Hud/QuestPanel.cs). CheckY = top of the check glyph's
+/// box in the 1.0 layout (searched +-SearchY rows, and along x from SearchFromWidth of the client
+/// width); the X glyph's box is XOffset to the right. Masks: '#' glyph, '.' band, other = either.
+/// A glyph cell is "on" when its luminance is at least BrightDelta above the mean of the box's
+/// border; a glyph matches when MinMatch (MinMatchScaled on a stretched HUD) of its cells (and of
+/// its '#' cells) agree. The portrait
+/// box's bottom border: rows LineDy / LineDy+1 below the check box top are brighter by
+/// LineMinContrast than the two rows above, over LineMinShare of the columns LineDx[0]..LineDx[1]
+/// (relative to the check box). Present on more than the "อ่านค่าไม่ได้" limit -> Message (once per
+/// appearance; gone after GoneStablePolls polls) instead of the generic message for CoveredRows.</summary>
+public sealed record QuestPanelConfig(
+    string Message, string[] CoveredRows, int GoneStablePolls,
+    double CheckY, int SearchY, double SearchFromWidth, double XOffset, int BrightDelta, double MinMatch, double MinMatchScaled,
+    double LineDy, double[] LineDx, int LineMinContrast, double LineMinShare,
+    string[] CheckMask, string[] CloseMask);

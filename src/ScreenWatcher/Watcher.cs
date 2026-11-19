@@ -38,6 +38,7 @@ public sealed class Watcher : IDisposable
     readonly IReadOnlyList<IFrameDetector> _frameDetectors;
     readonly IReadOnlyList<IHudDetector> _hudDetectors;
     readonly UnreadableDetector _unreadable;
+    readonly QuestPanelDetector _quest;
     readonly List<WatchEvent> _hudEvents = [];
     readonly IArmedState[] _armables;
     readonly Dictionary<string, bool> _armed = new(StringComparer.Ordinal), _armedBefore = new(StringComparer.Ordinal);
@@ -75,7 +76,8 @@ public sealed class Watcher : IDisposable
         var items = new ItemDetector(config, IconSet.Load(Path.Combine(AppContext.BaseDirectory, IconSet.FileName)), Readings, Options);
         _hudDetectors = [new AmmoDetector(config, glyphs, Readings), new FuelDetector(config, Readings, Options),
             new KillDetector(config, glyphs, Readings), items];
-        _unreadable = new UnreadableDetector(config, Readings, Options, () => items.BarHiddenPolls);
+        _unreadable = new UnreadableDetector(config, Readings, Options, () => items.BarHiddenPolls, id => _quest!.Covers(id));
+        _quest = new QuestPanelDetector(config, Readings, Options, () => _unreadable.LimitSeconds);
         _unreadable.Recovered += r => { try { UnreadableRecovered?.Invoke(r); } catch (Exception) { } };
         _armables = [.. _hudDetectors.OfType<IArmedState>()];
         Ring = new HudRing(config.Collect.Regions.Select(r => new CollectRegion(r)),
@@ -168,6 +170,7 @@ public sealed class Watcher : IDisposable
             foreach (var d in _frameDetectors) Raise(d.Process(_frame, scale, now));
             _hudEvents.Clear();
             foreach (var d in _hudDetectors) d.Process(_frame, scale, now, _hudEvents);
+            _quest.Process(_frame, scale, now, _hudEvents);
             _unreadable.Process(now, _frame.Width, _frame.Height, _hudEvents);
             foreach (var e in _hudEvents) Raise(e);
             Ring.Push(_frame, scale, now);
@@ -271,6 +274,7 @@ public sealed class Watcher : IDisposable
     {
         foreach (var d in _hudDetectors) d.Reset();
         _unreadable.Interrupt();
+        _quest?.Interrupt();
     }
 
     void SetStatus(GameStatus s)

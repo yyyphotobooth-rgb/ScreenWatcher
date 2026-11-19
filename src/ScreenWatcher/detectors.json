@@ -347,6 +347,77 @@
     ]
   },
 
+  "questPanel": {
+    // Level-up quest panel (Detection/Hud/QuestPanel.cs): appears at the top of the client on a
+    // level-up and stays until closed; portrait box (x ~172..398) and text box (x ~400..858),
+    // y 0..~182 at 1024x768. It covers the missile counter (and the fuel TEXT, which is not read;
+    // the fuel arc ends at x ~156). Recognised by its frame and layout only (the check and X
+    // glyphs and the portrait box's bottom border), never its text or portrait. Measured on the
+    // only appearance seen (field trial 2026-11-19, 5 JPEG frames 06:20..09:38, band luminance
+    // 76..145): the panel is semi-transparent, so everything is relative to the band.
+    "message": "เลเวลอัพ: หน้าเควสบังข้อมูลอยู่",
+    "coveredRows": [ "missileEmpty" ],
+    "goneStablePolls": 3,
+    // Check box top-left at (763, 150) on a 1024x768 client; X box at +51 px. Searched along x
+    // from half the client width (the anchor at a stretched HUD is unknown: no ~1.3 sample).
+    "checkY": 150, "searchY": 4, "searchFromWidth": 0.5, "xOffset": 51,
+    // Glyph cells agreeing: exact at 1.0 (only the true position passes); a stretched HUD blurs
+    // the glyph edges (synthetic 1.25 / 1.305 stretch of the sample: 0.85 passes, 0.9 does not).
+    "brightDelta": 45, "minMatch": 0.9, "minMatchScaled": 0.85,
+    // Portrait box bottom border: bright row y 169 over dark row 168, x 185..390.
+    "lineDy": 19, "lineDx": [ -578, -373 ], "lineMinContrast": 30, "lineMinShare": 0.7,
+    "checkMask": [
+        "........................",
+        "........................",
+        "........................",
+        "....................#...",
+        "..................?##...",
+        ".................?###...",
+        "................?####...",
+        "...............?#####...",
+        "...............######...",
+        "..............#######...",
+        ".............?######?...",
+        ".......?.....######.....",
+        "...?.?##?...#####?......",
+        "....?####..?#####.......",
+        "..?######..####?........",
+        "....?#####?####.........",
+        ".....?########..........",
+        "......?######...........",
+        "........####?...........",
+        ".........###............",
+        "..........#.............",
+        "........................",
+        "........................"
+      ],
+    "closeMask": [
+        "........................",
+        "........................",
+        "........................",
+        "....?#...........??.....",
+        "...?##?.........?##?....",
+        "...####?........####?...",
+        "...?####?......####?....",
+        ".....####?....####?.....",
+        ".....?####?..####?......",
+        ".......####?####?.......",
+        ".......?#######?........",
+        "........?#####?.........",
+        ".........#####?.........",
+        "........#######?........",
+        ".......#########?.......",
+        "......####?..####?......",
+        ".....####?...?####?.....",
+        "....####?.....?####?....",
+        "...####?.......?####?...",
+        "....###.........?##?....",
+        ".....?...........??.....",
+        "........................",
+        "........................"
+      ]
+  },
+
   "diagnostics": {
     // Field-trial diagnostics (Diagnostics/). Everything stays in %LOCALAPPDATA%\ScreenWatcher.
     // journal\yyyy-MM-dd.jsonl: one JSON record per line, always on; oldest day files go first.

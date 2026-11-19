@@ -35,6 +35,7 @@ public sealed class UnreadableDetector
     readonly HudReadings _readings;
     readonly HudOptions _options;
     readonly Func<int> _barHiddenPolls;
+    readonly Func<string, bool>? _covered;
     readonly Row[] _rows;
     readonly List<Row> _pending = [];
     readonly List<Row> _crossed = [];
@@ -42,8 +43,11 @@ public sealed class UnreadableDetector
     string _shown = "";
 
     /// <param name="barHiddenPolls">Polls in a row the item bar was not seen (ItemDetector.BarHiddenPolls).</param>
-    public UnreadableDetector(WatcherConfig config, HudReadings readings, HudOptions options, Func<int> barHiddenPolls)
+    /// <param name="covered">Rows covered by a recognised panel right now (QuestPanelDetector.Covers):
+    /// they are left out, that panel sends its own message.</param>
+    public UnreadableDetector(WatcherConfig config, HudReadings readings, HudOptions options, Func<int> barHiddenPolls, Func<string, bool>? covered = null)
     {
+        _covered = covered;
         _c = config.Unreadable;
         _readings = readings;
         _options = options;
@@ -141,6 +145,7 @@ public sealed class UnreadableDetector
 
     Sight See(Row r)
     {
+        if (_covered?.Invoke(r.Id) == true) return Sight.NotShown;   // the level-up panel's own message covers it
         string text = _readings.Get(r.Id).Text;
         if (text == RowReading.Unknown) return Sight.Unreadable;
         if (text == ItemDetector.GoneText) return Sight.NotShown;
