@@ -138,7 +138,7 @@ public class FuelTests(ITestOutputHelper output)
 
         Assert.Null(d.Update(1));
         Assert.Null(d.Update(1));
-        Assert.Equal("น้ำมันเหลือ ~9%", d.Update(1));     // third stable poll at ~9 % <= 10 %
+        Assert.Equal("เชื้อเพลิงใกล้หมด เหลือ ~9%", d.Update(1));     // third stable poll at ~9 % <= 10 %
         Assert.Equal(new RowReading("~9%", true), readings.Get(AlertIds.FuelLow));
         for (int i = 0; i < 5; i++) Assert.Null(d.Update(1));
         foreach (int lit in new[] { 0, 0, 0, 0 }) Assert.Null(d.Update(lit)); // lower still: no second alert
@@ -166,7 +166,7 @@ public class FuelTests(ITestOutputHelper output)
         Assert.Null(d.Update(5));                       // flicker: not 3 in a row
         Assert.Null(d.Update(4));
         Assert.Null(d.Update(4));
-        Assert.Equal("น้ำมันเหลือ ~26%", d.Update(4));
+        Assert.Equal("เชื้อเพลิงใกล้หมด เหลือ ~26%", d.Update(4));
 
         var d2 = NewDetector(readings);
         foreach (int? lit in new int?[] { 0, 0, null, 0, 0, null, null, null }) Assert.Null(d2.Update(lit));

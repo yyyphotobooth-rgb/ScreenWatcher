@@ -166,8 +166,10 @@ public sealed record ItemsConfig(
 
 /// <summary>A watched item: alert row id, Thai name and unit, default threshold, the icon
 /// pictures (icons.json) that show it, for potions the kit picture whose mark it has, and
-/// optionally its own icon distance limit (else ItemsConfig.IconMaxDistance).</summary>
-public sealed record ItemDef(string Id, string Name, string Unit, int DefaultThreshold, string[] Icons, string? Mark = null, double? MaxDistance = null);
+/// optionally its own icon distance limit (else ItemsConfig.IconMaxDistance) and its own alert texts
+/// (else ItemsConfig.LowMessage / GoneMessage; {0} name, {1} count, {2} unit).</summary>
+public sealed record ItemDef(string Id, string Name, string Unit, int DefaultThreshold, string[] Icons, string? Mark = null, double? MaxDistance = null,
+    string? LowMessage = null, string? GoneMessage = null);
 
 /// <summary>Field-trial diagnostics (Diagnostics/): event journal, alert evidence, /miss, the
 /// in-memory ring of HUD crops and the "อัตโนมัติ" collection rules.</summary>

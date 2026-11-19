@@ -218,7 +218,7 @@ public class KillTests(ITestOutputHelper output)
         Assert.Empty(events);
         d.Process(noPanel, HudScale.One, t.AddSeconds(4), events);
         var e = Assert.Single(events);
-        Assert.Equal("ยิงมอนครบ 300 ตัวแล้ว (เลขล่าสุดที่เห็น 299)", e.Message);
+        Assert.Equal("ภารกิจสำเร็จ! ยิงครบ 300 ตัว (เลขล่าสุดที่เห็น 299)", e.Message);
         Assert.Equal(AlertIds.Kill300, e.AlertId);
         Assert.Equal(new Rectangle(1024 - 180, 326, 180, 40), e.Crop);
         var m = new AlertComposer(TestData.Config).Compose(e, noPanel, HudScale.One);
@@ -277,7 +277,7 @@ public class KillTests(ITestOutputHelper output)
         Assert.Equal(299, e.Image!.Value);
         Assert.Equal((180, 40), (e.Image.Width, e.Image.Height));
         Assert.Equal(crop299, Bgr(e.Image.Pixels, 180 * 40));
-        Assert.Equal("ยิงมอนครบ 300 ตัวแล้ว (เลขล่าสุดที่เห็น 299)", e.Message);
+        Assert.Equal("ภารกิจสำเร็จ! ยิงครบ 300 ตัว (เลขล่าสุดที่เห็น 299)", e.Message);
 
         // The PNG that goes to Discord is that 299 crop, pixel for pixel, with the orange digits on it.
         var m = new AlertComposer(TestData.Config).Compose(e, noPanel, HudScale.One);

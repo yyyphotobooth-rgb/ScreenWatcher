@@ -25,9 +25,9 @@ public static class AlertRowCatalog
         new(AlertIds.FuelLow, "น้ำมันต่ำกว่า", Implemented: true, "%", 10, MaxThreshold: 100),
         new(AlertIds.FuelBottles, "ขวดน้ำมันเหลือ", Implemented: true, "ขวด", 2),
         new(AlertIds.MonsterCard, "บัตรกันมอนเหลือ", Implemented: true, "ใบ", 3),
-        new(AlertIds.HpPotions, "ยาเลือดเหลือ", Implemented: true, "ขวด", 5, SideChooser: true),
-        new(AlertIds.ShieldPotions, "ยาเกราะเหลือ", Implemented: true, "ขวด", 5, SideChooser: true),
-        new(AlertIds.SpPotions, "ยา SP เหลือ", Implemented: true, "ขวด", 5, SideChooser: true),
+        new(AlertIds.HpPotions, "ยาเลือดเหลือ", Implemented: true, "ชิ้น", 5, SideChooser: true),
+        new(AlertIds.ShieldPotions, "ยาเกราะเหลือ", Implemented: true, "ชิ้น", 5, SideChooser: true),
+        new(AlertIds.SpPotions, "ยา SP เหลือ", Implemented: true, "ชิ้น", 5, SideChooser: true),
         new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: true),
         // "ตอนนี้": ปกติ / เต็ม (รอรีเซ็ต) (latched until "รีเซ็ต" or /reset) / ? (message box not seen).
         new(AlertIds.InventoryFull, "ช่องเก็บของเต็ม", Implemented: true, ResetButton: true),

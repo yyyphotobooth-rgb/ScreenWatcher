@@ -221,7 +221,7 @@ public class ItemTests(ITestOutputHelper output)
         var bar = Bar(true, (AlertIds.AmmoBox, 8, 5), (AlertIds.FuelBottles, 9, 2), (AlertIds.MonsterCard, 7, 3),
             (AlertIds.HpPotions, 1, 5), (AlertIds.ShieldPotions, 2, 5), (AlertIds.SpPotions, 3, 5));
         Assert.Equal(
-            ["กล่องเติมกระสุนเหลือ 5 กล่อง", "ขวดน้ำมันเหลือ 2 ขวด", "บัตรกันมอนเหลือ 3 ใบ", "ยาเลือดเหลือ 5 ขวด", "ยาเกราะเหลือ 5 ขวด", "ยา SP เหลือ 5 ขวด"],
+            ["กล่องเติมกระสุนเหลือ 5 กล่อง เตรียมเติมเสบียง", "เชื้อเพลิงสำรองเหลือ 2 ขวด", "บัตรกันมอนเหลือ 3 ใบ", "ยาเลือดเหลือ 5 ชิ้น เตรียมเติมเสบียง", "ยาเกราะเหลือ 5 ชิ้น เตรียมเติมเสบียง", "ยา SP เหลือ 5 ชิ้น เตรียมเติมเสบียง"],
             Feed(d, bar, bar));
 
         var (above, _, _) = NewDetector();
@@ -236,7 +236,7 @@ public class ItemTests(ITestOutputHelper output)
         var (d, readings, options) = NewDetector();
         options.SetThreshold(AlertIds.HpPotions, 200);
         var bar = Bar(true, (AlertIds.HpPotions, 1, 176));
-        Assert.Equal(["ยาเลือดเหลือ 176 ขวด"], Feed(d, bar, bar));
+        Assert.Equal(["ยาเลือดเหลือ 176 ชิ้น เตรียมเติมเสบียง"], Feed(d, bar, bar));
         Assert.True(readings.Get(AlertIds.HpPotions).Reached);
     }
 
@@ -257,9 +257,9 @@ public class ItemTests(ITestOutputHelper output)
         var without = Bar(true, (AlertIds.HpPotions, 1, 100));
         Assert.Equal(3, Cfg.GoneStablePolls);
 
-        Assert.Equal(["ขวดน้ำมันเหลือ 1 ขวด"], Feed(d, with, with));
+        Assert.Equal(["เชื้อเพลิงสำรองเหลือ 1 ขวด"], Feed(d, with, with));
         Assert.Empty(Feed(d, without, without));                         // two polls: not yet
-        Assert.Equal(["ขวดน้ำมันหมด"], Feed(d, without));
+        Assert.Equal(["เชื้อเพลิงสำรองหมด!"], Feed(d, without));
         Assert.Equal(new RowReading(ItemDetector.GoneText, true), readings.Get(AlertIds.FuelBottles));
         Assert.Empty(Feed(d, without, without, without, without));       // once
 
@@ -267,7 +267,7 @@ public class ItemTests(ITestOutputHelper output)
         var restocked = Bar(true, (AlertIds.FuelBottles, 9, 20), (AlertIds.HpPotions, 1, 100));
         Assert.Empty(Feed(d, restocked, restocked));
         Assert.Equal(new RowReading("20", false), readings.Get(AlertIds.FuelBottles));
-        Assert.Equal(["ขวดน้ำมันหมด"], Feed(d, without, without, without));
+        Assert.Equal(["เชื้อเพลิงสำรองหมด!"], Feed(d, without, without, without));
     }
 
     [Fact]
@@ -299,7 +299,7 @@ public class ItemTests(ITestOutputHelper output)
         Assert.False(readings.Get(AlertIds.SpPotions).TwoFound);
 
         options.SetWatchRight(AlertIds.HpPotions, true);                // user picks ขวา
-        Assert.Equal(["ยาเลือดเหลือ 3 ขวด"], Feed(d, Two(40, 3), Two(40, 3)));
+        Assert.Equal(["ยาเลือดเหลือ 3 ชิ้น เตรียมเติมเสบียง"], Feed(d, Two(40, 3), Two(40, 3)));
         Assert.Equal(new RowReading("3", true, TwoFound: true), readings.Get(AlertIds.HpPotions));
     }
 
@@ -311,9 +311,9 @@ public class ItemTests(ITestOutputHelper output)
         var onlyRight = Bar(true, (AlertIds.ShieldPotions, 6, 300));
 
         Assert.Empty(Feed(d, Two(8, 300), Two(8, 300), Two(7, 300), Two(6, 300), Two(6, 300)));
-        Assert.Equal(["ยาเกราะเหลือ 5 ขวด"], Feed(d, Two(5, 300), Two(5, 300)));
+        Assert.Equal(["ยาเกราะเหลือ 5 ชิ้น เตรียมเติมเสบียง"], Feed(d, Two(5, 300), Two(5, 300)));
         // Left used up: its icon is gone, the right one (300) is still there.
-        Assert.Equal(["ยาเกราะหมด"], Feed(d, onlyRight, onlyRight, onlyRight));
+        Assert.Equal(["ยาเกราะหมด! โล่ป้องกันไม่มีสำรอง"], Feed(d, onlyRight, onlyRight, onlyRight));
         Assert.Equal(new RowReading(ItemDetector.GoneText, true, TwoFound: true), readings.Get(AlertIds.ShieldPotions));
         Assert.Empty(Feed(d, onlyRight, onlyRight, onlyRight, onlyRight));   // stays on "left": no switch, no repeat
 
@@ -335,7 +335,7 @@ public class ItemTests(ITestOutputHelper output)
         d.Process(frame, HudScale.One, T0.AddSeconds(1), events);
         Assert.True(readings.Get(AlertIds.HpPotions).TwoFound);
         var e = Assert.Single(events, x => x.AlertId == AlertIds.HpPotions);
-        Assert.Equal("ยาเลือดเหลือ 176 ขวด", e.Message);
+        Assert.Equal("ยาเลือดเหลือ 176 ชิ้น เตรียมเติมเสบียง", e.Message);
         Assert.Equal(Crop, e.Crop);
         using var img = new Bitmap(new MemoryStream(new AlertComposer(TestData.Config).Compose(e, frame, HudScale.One).Png!));
         Assert.Equal(Crop.Size, img.Size);

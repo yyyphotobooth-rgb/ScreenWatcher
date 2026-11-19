@@ -721,6 +721,9 @@ public sealed class MainForm : Form
         OpenUrl(url);
     }
 
+    /// <summary>The "ทดสอบส่ง" Discord message.</summary>
+    public const string TestSendText = "ทดสอบสัญญาณ ศูนย์บัญชาการได้ยินชัดเจน";
+
     async Task TestSendAsync()
     {
         string? problem = _bot.Status.State != BotState.Connected ? "ยังไม่ได้เชื่อมต่อ Discord"
@@ -729,7 +732,7 @@ public sealed class MainForm : Form
 
         _testMain.Enabled = _testSettings.Enabled = false;
         ShowTestResult("กำลังส่ง...", ok: true);
-        var msg = new AlertMessage("test", "ทดสอบส่งจาก ScreenWatcher ✅ ถ้าเห็นข้อความนี้ในมือถือ แปลว่าแจ้งเตือนใช้ได้", null, null, DateTime.Now);
+        var msg = new AlertMessage("test", TestSendText, null, null, DateTime.Now);
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));

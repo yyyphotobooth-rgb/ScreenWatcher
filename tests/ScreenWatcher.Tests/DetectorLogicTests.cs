@@ -24,7 +24,7 @@ public class DetectorLogicTests
             if (d.Update(o, T0.AddSeconds(i * stepSeconds)) is { } e)
             {
                 Assert.Equal(WatchEventKind.Death, e.Kind);
-                Assert.Equal("ตายแล้ว", e.Message);
+                Assert.Equal("ยานถูกยิงตก!", e.Message);
                 fired.Add(i);
             }
             i++;
@@ -101,7 +101,7 @@ public class DetectorLogicTests
             if (d.Update(found[i], T0.AddSeconds(i)) is { } e)
             {
                 Assert.Equal(WatchEventKind.GameDropped, e.Kind);
-                Assert.Equal("เกมส์หลุด", e.Message);
+                Assert.Equal("ขาดการติดต่อกับยาน (เกมส์หลุด)", e.Message);
                 fired.Add(i);
             }
         return fired;

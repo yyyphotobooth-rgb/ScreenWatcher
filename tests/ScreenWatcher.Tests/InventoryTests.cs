@@ -176,7 +176,7 @@ public class InventoryTests(ITestOutputHelper output)
         Assert.Equal(new RowReading("ปกติ", false), readings.Get(AlertIds.InventoryFull));
         Feed(d, events, 5, 60, Framed(phrase: true));
         var e = Assert.Single(events);
-        Assert.Equal("ช่องเก็บของเต็ม", e.Message);
+        Assert.Equal("ห้องเก็บสัมภาระเต็ม!", e.Message);
         Assert.Equal(AlertIds.InventoryFull, e.AlertId);
         Assert.Equal(Box, e.Crop);
         Assert.Equal(new RowReading("เต็ม (รอรีเซ็ต)", true), readings.Get(AlertIds.InventoryFull));
@@ -245,7 +245,7 @@ public class InventoryTests(ITestOutputHelper output)
             u.Process(T0.AddSeconds(s), 1024, 768, events);
         }
         var e = Assert.Single(events);
-        Assert.Equal("อ่านค่าไม่ได้: กล่องข้อความระบบ (อาจมีหน้าต่างบังอยู่)", e.Message);
+        Assert.Equal("เรดาร์ถูกบัง อ่านค่าไม่ได้: กล่องข้อความระบบ", e.Message);
         Assert.Equal(AlertIds.InventoryFull, Assert.Single(e.Unreadable!).Id);
     }
 

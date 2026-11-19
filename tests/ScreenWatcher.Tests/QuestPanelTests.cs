@@ -130,7 +130,7 @@ public class QuestPanelTests(ITestOutputHelper output)
         Assert.Empty(rig.Events);
         rig.Poll(16, 200, panel: true);                           // hours under the panel
         var e = Assert.Single(rig.Events);
-        Assert.Equal("เลเวลอัพ: หน้าเควสบังข้อมูลอยู่", e.Message);
+        Assert.Equal("มีภารกิจใหม่เข้ามา หน้าเควสบังข้อมูลอยู่", e.Message);
         Assert.Equal(AlertIds.Unreadable, e.AlertId);
         Assert.Equal(new Rectangle(0, 0, 1024, 768), e.Crop);  // full client frame
         Assert.Equal([AlertIds.MissileEmpty], e.Unreadable!.Select(r => r.Id));
@@ -140,7 +140,7 @@ public class QuestPanelTests(ITestOutputHelper output)
         rig.Readings.Set(AlertIds.Kill300, RowReading.Unknown);
         rig.Poll(200, 215, panel: true);
         Assert.Equal(2, rig.Events.Count);
-        Assert.Equal("อ่านค่าไม่ได้: นับมอน (อาจมีหน้าต่างบังอยู่)", rig.Events[1].Message);
+        Assert.Equal("เรดาร์ถูกบัง อ่านค่าไม่ได้: นับมอน", rig.Events[1].Message);
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public class QuestPanelTests(ITestOutputHelper output)
         rig.Readings.Set(AlertIds.MissileEmpty, RowReading.Unknown);
         rig.Poll(63, 80, panel: true);                            // next level-up
         Assert.Equal(2, rig.Events.Count);
-        Assert.All(rig.Events, e => Assert.Equal("เลเวลอัพ: หน้าเควสบังข้อมูลอยู่", e.Message));
+        Assert.All(rig.Events, e => Assert.Equal("มีภารกิจใหม่เข้ามา หน้าเควสบังข้อมูลอยู่", e.Message));
     }
 
     [Fact]
@@ -189,6 +189,6 @@ public class QuestPanelTests(ITestOutputHelper output)
         readings.Set(AlertIds.MissileEmpty, RowReading.Unknown);
         for (int s = 30; s < 45; s++) q.Process(frame, HudScale.One, T0.AddSeconds(s), events);
         Assert.True(q.Present);
-        Assert.Equal("เลเวลอัพ: หน้าเควสบังข้อมูลอยู่", Assert.Single(events).Message);
+        Assert.Equal("มีภารกิจใหม่เข้ามา หน้าเควสบังข้อมูลอยู่", Assert.Single(events).Message);
     }
 }

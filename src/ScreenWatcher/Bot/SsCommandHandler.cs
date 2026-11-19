@@ -25,7 +25,7 @@ public sealed class SsCommandHandler(Func<SnapshotResult> snapshot, Func<ulong?>
     public const string CommandName = "ss";
     public const string CommandDescription = "ส่งภาพจอเกมตอนนี้";
 
-    public const string NotFoundText = "ไม่พบหน้าต่างเกม";
+    public const string NotFoundText = "ไม่พบสัญญาณจากยาน (ไม่พบหน้าต่างเกม)";
     public const string MinimizedText = "หน้าต่างเกมถูกย่ออยู่ จับภาพไม่ได้";
     public const string FailedText = "จับภาพจอเกมไม่สำเร็จ";
     public const string WrongChannelText = "ใช้ /ss ได้เฉพาะในห้องที่ตั้งไว้ในโปรแกรม ScreenWatcher";

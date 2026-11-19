@@ -86,7 +86,7 @@ public sealed class DiscordAlertTests : IDisposable
 
         var m = composer.Compose(e, frame, HudScale.One);
 
-        Assert.Equal("ตายแล้ว", m.Text);
+        Assert.Equal("ยานถูกยิงตก!", m.Text);
         Assert.Equal(AlertIds.Death, m.AlertId);
         Assert.NotNull(m.Png);
         Assert.EndsWith(".png", m.FileName);
@@ -123,7 +123,7 @@ public sealed class DiscordAlertTests : IDisposable
         var withoutFrame = composer.Compose(e, null, HudScale.One);
         var evenWithFrame = composer.Compose(e, DeadFrame(), HudScale.One);
 
-        Assert.Equal("เกมส์หลุด", withoutFrame.Text);
+        Assert.Equal("ขาดการติดต่อกับยาน (เกมส์หลุด)", withoutFrame.Text);
         Assert.Equal(AlertIds.GameDropped, withoutFrame.AlertId);
         Assert.Null(withoutFrame.Png);
         Assert.Null(evenWithFrame.Png);
@@ -291,7 +291,7 @@ public sealed class DiscordAlertTests : IDisposable
 
         await h.HandleAsync(i);
 
-        Assert.Equal(["defer", "followup:ไม่พบหน้าต่างเกม"], i.Calls);
+        Assert.Equal(["defer", "followup:ไม่พบสัญญาณจากยาน (ไม่พบหน้าต่างเกม)"], i.Calls);
     }
 
     [Fact]

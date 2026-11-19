@@ -185,12 +185,12 @@ public class AmmoTests(ITestOutputHelper output)
         d.Process(frame, HudScale.One, t.AddSeconds(1), events);
         var e = Assert.Single(events);
         Assert.Equal(WatchEventKind.Hud, e.Kind);
-        Assert.Equal("มิสไซล์หมด", e.Message);
+        Assert.Equal("มิสไซล์หมดคลัง!", e.Message);
         Assert.Equal(AlertIds.MissileEmpty, e.AlertId);
         Assert.Equal(new Rectangle(0, 0, 256, 30), e.Crop);
 
         var m = new AlertComposer(TestData.Config).Compose(e, frame, HudScale.One);
-        Assert.Equal("มิสไซล์หมด", m.Text);
+        Assert.Equal("มิสไซล์หมดคลัง!", m.Text);
         Assert.Equal(AlertIds.MissileEmpty, m.AlertId);
         using var img = new Bitmap(new MemoryStream(m.Png!));
         Assert.Equal(new Size(256, 30), img.Size);
@@ -198,6 +198,6 @@ public class AmmoTests(ITestOutputHelper output)
         events.Clear();
         d.Process(GunEmpty.Load(), HudScale.One, t.AddSeconds(2), events);
         d.Process(GunEmpty.Load(), HudScale.One, t.AddSeconds(3), events);
-        Assert.Equal("กระสุนปืนกลหมด", Assert.Single(events).Message);
+        Assert.Equal("กระสุนปืนกลหมดแม็ก!", Assert.Single(events).Message);
     }
 }

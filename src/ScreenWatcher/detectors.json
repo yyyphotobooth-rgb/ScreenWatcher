@@ -13,7 +13,7 @@
   "drop": {
     // The game window was seen earlier and is now missing for this many consecutive checks.
     "missingChecksToFire": 2,
-    "message": "เกมส์หลุด"
+    "message": "ขาดการติดต่อกับยาน (เกมส์หลุด)"
   },
 
   "alerts": {
@@ -53,7 +53,7 @@
   },
 
   "death": {
-    "message": "ตายแล้ว",
+    "message": "ยานถูกยิงตก!",
     // Gauge dark AND dialog present continuously for at least this long.
     "holdSeconds": 1.5,
 
@@ -214,12 +214,12 @@
     "stablePolls": 2,
     "cropRegion": "ammo",
     "gun": {
-      "message": "กระสุนปืนกลหมด",
+      "message": "กระสุนปืนกลหมดแม็ก!",
       "field": { "anchor": "topLeft", "cellX": [ 58, 71, 85, 98, 111 ], "y": 12, "glyphs": "ammo", "inks": [ "ammoBlue", "ammoRed" ],
                  "searchPx": 2, "minScore": 0.6, "minMargin": 0.03 }
     },
     "missile": {
-      "message": "มิสไซล์หมด",
+      "message": "มิสไซล์หมดคลัง!",
       "field": { "anchor": "topLeft", "cellX": [ 183, 196, 210, 223, 236 ], "y": 12, "glyphs": "ammo", "inks": [ "ammoBlue", "ammoRed" ],
                  "searchPx": 2, "minScore": 0.6, "minMargin": 0.03 }
     }
@@ -238,7 +238,7 @@
     //   141..157; 10 at 179..191; 11 at 202, 204; 12 at 213; all 13 at 288..293 (of 300).
     //   That fits n segments <=> fuel % in (6.0 + 5.83 (n-1), 6.0 + 5.83 n]. BELOW 84/300 THERE IS
     //   NO SAMPLE: the ranges for 0..3 segments (0..6, 6..12, 12..18, 18..24 %) are extrapolated.
-    "message": "น้ำมันเหลือ ~{0}%",
+    "message": "เชื้อเพลิงใกล้หมด เหลือ ~{0}%",
     "cropRegion": "gauge",
     "stablePolls": 3,
     "defaultThresholdPercent": 10,
@@ -269,7 +269,7 @@
     // the ship is stopped/landed ("UNIT STOPPED") with the map grid still visible, and it is
     // absent in town. Seen only at HUD scale 1.0; at ~1.3 the position is assumed to scale about
     // the top-right corner (no sample).
-    "message": "ยิงมอนครบ 300 ตัวแล้ว",
+    "message": "ภารกิจสำเร็จ! ยิงครบ 300 ตัว",
     "cropRegion": "kill",
     "stablePolls": 2,
     "target": 300,
@@ -290,6 +290,7 @@
     // "Icon gone" needs the bar visible and the icon missing for this many polls in a row.
     "goneStablePolls": 3,
     "cropRegion": "items",
+    // {0} = item name, {1} = count, {2} = unit. An item may give its own lowMessage / goneMessage.
     "lowMessage": "{0}เหลือ {1} {2}",
     "goneMessage": "{0}หมด",
     "slots": 10, "slotLeft": -161, "slotPitch": 31, "slotTop": -47,
@@ -338,12 +339,18 @@
     // Slot frame blue (5..7, 93..99, 168..178); a selected slot's frame is orange instead.
     "frameMaxR": 40, "frameG": [ 70, 125 ], "frameB": [ 140, 200 ], "frameMinRun": 12, "frameMinRuns": 5,
     "items": [
-      { "id": "ammoBox", "name": "กล่องเติมกระสุน", "unit": "กล่อง", "defaultThreshold": 5, "icons": [ "ammoBox" ] },
-      { "id": "fuelBottles", "name": "ขวดน้ำมัน", "unit": "ขวด", "defaultThreshold": 2, "icons": [ "bottle" ], "maxDistance": 13 },
-      { "id": "monsterCard", "name": "บัตรกันมอน", "unit": "ใบ", "defaultThreshold": 3, "icons": [ "card" ] },
-      { "id": "hpPotions", "name": "ยาเลือด", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "kitRed" },
-      { "id": "shieldPotions", "name": "ยาเกราะ", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "kitBlue" },
-      { "id": "spPotions", "name": "ยา SP", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "kitOrange" }
+      { "id": "ammoBox", "name": "กล่องเติมกระสุน", "unit": "กล่อง", "defaultThreshold": 5, "icons": [ "ammoBox" ],
+        "lowMessage": "{0}เหลือ {1} {2} เตรียมเติมเสบียง", "goneMessage": "{0}หมดคลัง!" },
+      { "id": "fuelBottles", "name": "ขวดน้ำมัน", "unit": "ขวด", "defaultThreshold": 2, "icons": [ "bottle" ], "maxDistance": 13,
+        "lowMessage": "เชื้อเพลิงสำรองเหลือ {1} {2}", "goneMessage": "เชื้อเพลิงสำรองหมด!" },
+      { "id": "monsterCard", "name": "บัตรกันมอน", "unit": "ใบ", "defaultThreshold": 3, "icons": [ "card" ],
+        "goneMessage": "{0}หมด!" },
+      { "id": "hpPotions", "name": "ยาเลือด", "unit": "ชิ้น", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "kitRed",
+        "lowMessage": "{0}เหลือ {1} {2} เตรียมเติมเสบียง", "goneMessage": "{0}หมด! ตัวถังเสี่ยงพัง" },
+      { "id": "shieldPotions", "name": "ยาเกราะ", "unit": "ชิ้น", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "kitBlue",
+        "lowMessage": "{0}เหลือ {1} {2} เตรียมเติมเสบียง", "goneMessage": "{0}หมด! โล่ป้องกันไม่มีสำรอง" },
+      { "id": "spPotions", "name": "ยา SP", "unit": "ชิ้น", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "kitOrange",
+        "lowMessage": "{0}เหลือ {1} {2} เตรียมเติมเสบียง", "goneMessage": "{0}หมด! ใช้สกิลไม่ได้" }
     ]
   },
 
@@ -355,7 +362,7 @@
     // Rows crossing the limit within this many seconds of the first one share one message.
     "combineSeconds": 3,
     // {0} = the short names below, comma separated. Sent with the full client frame.
-    "message": "อ่านค่าไม่ได้: {0} (อาจมีหน้าต่างบังอยู่)",
+    "message": "เรดาร์ถูกบัง อ่านค่าไม่ได้: {0}",
     // Watched rows in table order: [alert row id, short name].
     "rows": [
       [ "gunAmmoEmpty", "ปืนกล" ], [ "missileEmpty", "มิสไซล์" ], [ "ammoBox", "กล่องกระสุน" ],
@@ -373,7 +380,7 @@
     // the phrase matches all 2478 pixels of its box. Item counts are the same font at 11 px; at HUD
     // scale ~1.3 the counts are 15 px, so heights fontMinHeight..fontMaxHeight are rendered at
     // start-up and any of them may match. Lines scroll: the whole text area is searched.
-    "message": "ช่องเก็บของเต็ม",
+    "message": "ห้องเก็บสัมภาระเต็ม!",
     "phrase": "ช่องเก็บของของคุณมีพื้นที่ไม่เพียงพอ",
     "fontFace": "Tahoma", "fontMinHeight": 11, "fontMaxHeight": 18,
     "okText": "ปกติ", "fullText": "เต็ม (รอรีเซ็ต)",
@@ -455,7 +462,7 @@
     // glyphs and the portrait box's bottom border), never its text or portrait. Measured on the
     // only appearance seen (field trial 2026-11-19, 5 JPEG frames 06:20..09:38, band luminance
     // 76..145): the panel is semi-transparent, so everything is relative to the band.
-    "message": "เลเวลอัพ: หน้าเควสบังข้อมูลอยู่",
+    "message": "มีภารกิจใหม่เข้ามา หน้าเควสบังข้อมูลอยู่",
     "coveredRows": [ "missileEmpty" ],
     "goneStablePolls": 3,
     // Check box top-left at (763, 150) on a 1024x768 client; X box at +51 px. Searched along x

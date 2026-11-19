@@ -17,7 +17,7 @@ public sealed class MissCommandHandler(Func<string?, MissResult> record, Func<ul
     public const string NoteDescription = "เกิดอะไรขึ้น (ไม่ใส่ก็ได้)";
 
     public const string WrongChannelText = "ใช้ /miss ได้เฉพาะในห้องที่ตั้งไว้ในโปรแกรม ScreenWatcher";
-    public const string RecordedText = "บันทึกแล้ว ✅ เก็บภาพจอเกมและภาพ HUD ย้อนหลังไว้ในเครื่องแล้ว";
+    public const string RecordedText = "รับทราบ บันทึกเหตุการณ์แล้ว";
     public const string RecordedNoGameText = "บันทึกแล้ว ✅ (ไม่พบหน้าต่างเกม จึงบันทึกเป็นข้อความอย่างเดียว)";
     public const string FailedText = "บันทึกไม่สำเร็จ";
 

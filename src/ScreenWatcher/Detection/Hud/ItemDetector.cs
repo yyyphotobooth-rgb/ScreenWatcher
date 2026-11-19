@@ -123,7 +123,7 @@ public sealed class ItemDetector : IHudDetector, IArmedState
                     else if (st.ArmedLow)
                     {
                         st.ArmedLow = false;
-                        events.Add(new WatchEvent(WatchEventKind.Hud, string.Format(_c.LowMessage, Spaced(def.Name), v, def.Unit), now, def.Id, crop));
+                        events.Add(new WatchEvent(WatchEventKind.Hud, string.Format(def.LowMessage ?? _c.LowMessage, Spaced(def.Name), v, def.Unit), now, def.Id, crop));
                     }
                 }
                 _readings.Set(def.Id, st.Count.Latest?.ToString() ?? RowReading.Unknown, st.Count.Value <= threshold, two);
@@ -142,7 +142,7 @@ public sealed class ItemDetector : IHudDetector, IArmedState
                     if (st.Seen && !st.GoneFired)
                     {
                         st.GoneFired = true;
-                        events.Add(new WatchEvent(WatchEventKind.Hud, string.Format(_c.GoneMessage, Spaced(def.Name)), now, def.Id, crop));
+                        events.Add(new WatchEvent(WatchEventKind.Hud, string.Format(def.GoneMessage ?? _c.GoneMessage, Spaced(def.Name)), now, def.Id, crop));
                     }
                     _readings.Set(def.Id, st.GoneFired ? GoneText : RowReading.None, st.GoneFired, two);
                 }

@@ -82,7 +82,7 @@ public sealed class UnreadableTests : IDisposable
         var e = Assert.Single(_events);
         Assert.Equal(WatchEventKind.Hud, e.Kind);
         Assert.Equal(AlertIds.Unreadable, e.AlertId);
-        Assert.Equal("อ่านค่าไม่ได้: น้ำมัน (อาจมีหน้าต่างบังอยู่)", e.Message);
+        Assert.Equal("เรดาร์ถูกบัง อ่านค่าไม่ได้: น้ำมัน", e.Message);
         Assert.Equal(new Rectangle(0, 0, 1024, 768), e.Crop);
         var row = Assert.Single(e.Unreadable!);
         Assert.Equal((AlertIds.FuelLow, "น้ำมัน", 14.0), (row.Id, row.Name, row.Seconds));
@@ -111,7 +111,7 @@ public sealed class UnreadableTests : IDisposable
         Set(AlertIds.GunAmmoEmpty, "?");
         Poll(21, 40);
         Assert.Equal(2, _events.Count);
-        Assert.Equal("อ่านค่าไม่ได้: ปืนกล (อาจมีหน้าต่างบังอยู่)", _events[1].Message);
+        Assert.Equal("เรดาร์ถูกบัง อ่านค่าไม่ได้: ปืนกล", _events[1].Message);
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public sealed class UnreadableTests : IDisposable
         Set(AlertIds.Kill300, "80");                     // kill readable again at 39 s, before its message
         Poll(39, 45);                                    // fuel ("?" since 30 s) crosses at 41 s, sent at 44 s
         var e = Assert.Single(_events);
-        Assert.Equal("อ่านค่าไม่ได้: น้ำมัน (อาจมีหน้าต่างบังอยู่)", e.Message);
+        Assert.Equal("เรดาร์ถูกบัง อ่านค่าไม่ได้: น้ำมัน", e.Message);
 
         // A row that recovers after its message was sent is reported as recovered, as before.
         Set(AlertIds.FuelLow, "~40%");
@@ -158,10 +158,10 @@ public sealed class UnreadableTests : IDisposable
         Poll(9, 30);
 
         Assert.Equal(2, _events.Count);
-        Assert.Equal("อ่านค่าไม่ได้: ปืนกล, ยาเลือด, นับมอน (อาจมีหน้าต่างบังอยู่)", _events[0].Message);   // table order
+        Assert.Equal("เรดาร์ถูกบัง อ่านค่าไม่ได้: ปืนกล, ยาเลือด, นับมอน", _events[0].Message);   // table order
         Assert.Equal(T0.AddSeconds(19), _events[0].Time);
         Assert.Equal([AlertIds.GunAmmoEmpty, AlertIds.HpPotions, AlertIds.Kill300], _events[0].Unreadable!.Select(r => r.Id));
-        Assert.Equal("อ่านค่าไม่ได้: น้ำมัน (อาจมีหน้าต่างบังอยู่)", _events[1].Message);
+        Assert.Equal("เรดาร์ถูกบัง อ่านค่าไม่ได้: น้ำมัน", _events[1].Message);
         Assert.Equal(T0.AddSeconds(23), _events[1].Time);
         Assert.Equal("ปืนกล, น้ำมัน, ยาเลือด, นับมอน", _readings.Get(AlertIds.Unreadable).Text);
     }
@@ -200,7 +200,7 @@ public sealed class UnreadableTests : IDisposable
         _barHidden = 3;                                  // "?" from 7 s: crosses at 18, sent at 21
         Poll(7, 22);
         var e = Assert.Single(_events);
-        Assert.Equal("อ่านค่าไม่ได้: กล่องกระสุน, ขวดน้ำมัน, บัตรกันมอน, ยาเลือด, ยาเกราะ, ยา SP (อาจมีหน้าต่างบังอยู่)", e.Message);
+        Assert.Equal("เรดาร์ถูกบัง อ่านค่าไม่ได้: กล่องกระสุน, ขวดน้ำมัน, บัตรกันมอน, ยาเลือด, ยาเกราะ, ยา SP", e.Message);
     }
 
     [Fact]

@@ -12,8 +12,8 @@ public sealed class ResetCommandHandler(Func<bool> reset, Func<ulong?> chosenCha
     public const string CommandDescription = "รีเซ็ตแจ้งเตือนช่องเก็บของเต็ม (หลังเคลียร์ของแล้ว)";
 
     public const string WrongChannelText = "ใช้ /reset ได้เฉพาะในห้องที่ตั้งไว้ในโปรแกรม ScreenWatcher";
-    public const string ResetText = "รีเซ็ตแล้ว ✅ จะแจ้งเตือน \"ช่องเก็บของเต็ม\" อีกครั้งเมื่อเต็ม";
-    public const string NotLatchedText = "รีเซ็ตแล้ว ✅ (ตอนนี้ช่องเก็บของยังไม่ได้แจ้งว่าเต็ม)";
+    public const string ResetText = "รับทราบ รีเซ็ตการแจ้งเตือนห้องเก็บสัมภาระแล้ว";
+    public const string NotLatchedText = ResetText;
     public const string FailedText = "รีเซ็ตไม่สำเร็จ";
 
     /// <summary>Returns true when the interaction was a /reset command (handled), false otherwise.</summary>
