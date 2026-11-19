@@ -119,6 +119,7 @@ public static class AlertIds
     public const string Kill300 = "kill300";
     public const string InventoryFull = "inventoryFull";
     public const string LevelUp = "levelUp";
+    public const string ExpStall = "expStall";
     public const string Unreadable = "unreadable";
 
     public static string For(WatchEvent e) => e.AlertId ?? e.Kind switch

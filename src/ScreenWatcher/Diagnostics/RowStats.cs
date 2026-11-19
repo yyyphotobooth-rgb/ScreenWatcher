@@ -73,14 +73,19 @@ public sealed class RowStats
         return list;
     }
 
-    /// <summary>The number a row's "ตอนนี้" text stands for: "123", "~25%", "&gt;90%", "หมด" (0).
+    /// <summary>The number a row's "ตอนนี้" text stands for: "123", "~25%", "&gt;90%", "หมด" (0), "Lv.88" / "Lv.88 · 50.61%" (88).
     /// False for "—", "?" and anything else.</summary>
     public static bool TryValue(string text, out int value)
     {
         value = 0;
         if (text == Detection.Hud.ItemDetector.GoneText) return true;
         var s = text.AsSpan();
-        if (s.StartsWith("Lv.")) s = s[3..];
+        if (s.StartsWith("Lv."))
+        {
+            s = s[3..];
+            int dot = s.IndexOf(" · ");   // level row "Lv.N · P%": the level
+            if (dot >= 0) s = s[..dot];
+        }
         if (s.Length > 0 && (s[0] == '~' || s[0] == '>')) s = s[1..];
         if (s.Length > 0 && s[^1] == '%') s = s[..^1];
         return s.Length > 0 && int.TryParse(s, NumberStyles.None, CultureInfo.InvariantCulture, out value);

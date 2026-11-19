@@ -10,7 +10,7 @@ namespace ScreenWatcher.UI;
 /// show the ซ้าย/ขวา chooser (two icons of the same potion type on the item bar).
 /// </summary>
 public sealed record AlertRowSpec(string Id, string Label, bool Implemented, string? Unit = null, int? DefaultThreshold = null,
-    int MaxThreshold = 9999, bool SideChooser = false, int MinThreshold = 0, bool ResetButton = false);
+    int MaxThreshold = 9999, bool SideChooser = false, int MinThreshold = 0, bool ResetButton = false, bool WideNow = false, int NowWidth = 72);
 
 public static class AlertRowCatalog
 {
@@ -31,8 +31,10 @@ public static class AlertRowCatalog
         new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: true),
         // "ตอนนี้": ปกติ / เต็ม (รอรีเซ็ต) (latched until "รีเซ็ต" or /reset) / ? (message box not seen).
         new(AlertIds.InventoryFull, "ช่องเก็บของเต็ม", Implemented: true, ResetButton: true),
-        // "ตอนนี้": Lv.N, or ? when the level line cannot be read.
-        new(AlertIds.LevelUp, "เลเวลอัพ", Implemented: true),
+        // "ตอนนี้": Lv.N · P% (Lv.N when the percentage is unreadable), or ? when the level line cannot be read.
+        new(AlertIds.LevelUp, "เลเวลอัพ", Implemented: true, WideNow: true),
+        // "ตอนนี้": ปกติ, นิ่ง N นาที, or ? when the percentage cannot be read (detectors.json "expStall").
+        new(AlertIds.ExpStall, "EXP ไม่ขยับเกิน", Implemented: true, "นาที", 5, MaxThreshold: 120, MinThreshold: 1, NowWidth: 100),
         // "ตอนนี้": ปกติ, or the short names of the rows over the limit (detectors.json "unreadable").
         new(AlertIds.Unreadable, "อ่านค่าไม่ได้เกิน", Implemented: true, "วินาที", 10, MaxThreshold: 3600, MinThreshold: 1),
     ];
@@ -246,7 +248,7 @@ sealed class AlertRow : Control
         int x = pad;
         _check.SetBounds(x, (h - S(18)) / 2, S(18), S(18));
         x += S(18) + gap;
-        int nowW = S(72), thrW = S(100);
+        int nowW = S(Spec.NowWidth), thrW = S(100);   // NowWidth 72 except "EXP ไม่ขยับเกิน" ("นิ่ง 120 นาที")
         int nowX = Width - pad - nowW;
         _now.SetBounds(nowX, 0, nowW, h);
         int labelRight = nowX - gap;
@@ -256,6 +258,13 @@ sealed class AlertRow : Control
             int tx = nowX - gap - thrW, bw = S(56);
             _reset.SetBounds(tx, (h - S(28)) / 2, bw, S(28));
             _now.SetBounds(tx + bw + S(6), 0, Width - pad - (tx + bw + S(6)), h);
+            labelRight = tx - gap;
+        }
+        else if (Spec.WideNow && _threshold is null)
+        {
+            // No threshold: "ตอนนี้" also takes the threshold column ("Lv.88 · 50.61%" is long).
+            int tx = nowX - gap - thrW;
+            _now.SetBounds(tx, 0, Width - pad - tx, h);
             labelRight = tx - gap;
         }
         else if (_threshold is not null)

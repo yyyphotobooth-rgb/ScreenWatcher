@@ -426,7 +426,7 @@ public sealed class LevelReader
 }
 
 /// <summary>
-/// Row "เลเวลอัพ". "ตอนนี้" = "Lv.N" ("?" when unreadable or off-screen). The first stable reading
+/// Row "เลเวลอัพ". "ตอนนี้" = "Lv.N · P%" or "Lv.N" ("?" when unreadable or off-screen). The first stable reading
 /// (StablePolls in a row) after the app starts or the game is found again is the baseline (no
 /// alert). A later stable reading higher by 1..MaxStep alerts once with the full client frame and
 /// becomes the baseline. A lower reading or a bigger jump is ignored (reported once per value
@@ -460,24 +460,35 @@ public sealed class LevelDetector : IHudDetector
     /// <summary>Polling thread: a stable reading that was ignored (from, to, reason "lower" / "jump").</summary>
     public event Action<int, int, string>? Ignored;
 
-    /// <summary>Polling thread: the last poll's level reading (null = unreadable). The percentage is
-    /// read only when something needs it (<see cref="LevelReader.ReadPercent(Frame, HudScale, int)"/>).</summary>
+    /// <summary>Polling thread: the last poll's level reading (null = unreadable).</summary>
     public int? LastLevel { get; private set; }
+
+    /// <summary>Polling thread: the last poll's whole line (level + percentage, read every poll; the
+    /// percentage only when its level digits agree with the level read); null = unreadable.</summary>
+    public LevelLine? LastLine { get; private set; }
 
     public void Process(Frame frame, HudScale scale, DateTime now, List<WatchEvent> events)
     {
-        LastLevel = _reader.Read(frame, scale);
-        Update(LastLevel, now, frame.Width, frame.Height, events);
+        // ReadLine reads the level exactly as Read does (Read = ReadLine().Level) plus the percentage.
+        LastLine = _reader.ReadLine(frame, scale);
+        LastLevel = LastLine?.Level;
+        Update(LastLevel, now, frame.Width, frame.Height, events, LastLine?.PctHundredths);
     }
 
-    /// <summary>One poll's reading (null = unreadable); also called directly by tests.</summary>
-    public void Update(int? level, DateTime now, int width, int height, List<WatchEvent> events)
+    /// <summary>"ตอนนี้" of the row: "Lv.N · P%" (P with 2 decimals), "Lv.N" when the percentage of
+    /// this poll is unreadable.</summary>
+    public static string RowText(int level, int? pctHundredths) =>
+        pctHundredths is { } p ? $"Lv.{level} · {LevelLine.FormatPct(p)}%" : $"Lv.{level}";
+
+    /// <summary>One poll's reading (null = unreadable); also called directly by tests.
+    /// <paramref name="pctHundredths"/> only changes the row text.</summary>
+    public void Update(int? level, DateTime now, int width, int height, List<WatchEvent> events, int? pctHundredths = null)
     {
         bool confirmed = _stable.Push(level);
         if (level is not null) _seen = true;
         // "?" after a few unreadable polls once a level was seen in this game session (like the
-        // other rows); nothing before that.
-        _readings.Set(AlertIds.LevelUp, _stable.Latest is { } l ? $"Lv.{l}" : _seen ? RowReading.Unknown : RowReading.None);
+        // other rows); nothing before that. The percentage is shown only when this poll read it.
+        _readings.Set(AlertIds.LevelUp, _stable.Latest is { } l ? RowText(l, level == l ? pctHundredths : null) : _seen ? RowReading.Unknown : RowReading.None);
         if (!confirmed) return;
         int v = _stable.Value!.Value;
         if (_baseline is not { } b) { _baseline = v; return; }
@@ -501,6 +512,7 @@ public sealed class LevelDetector : IHudDetector
     public void Reset()
     {
         LastLevel = null;
+        LastLine = null;
         _stable.Reset();
         _readings.Set(AlertIds.LevelUp, RowReading.None);
     }

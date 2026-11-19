@@ -42,6 +42,7 @@ public sealed class Watcher : IDisposable
     readonly QuestPanelDetector _quest;
     readonly InventoryDetector _inventory;
     readonly LevelDetector _level;
+    readonly ExpStallDetector _stall;
     readonly KillDetector _kill;
     readonly List<WatchEvent> _hudEvents = [];
     readonly IArmedState[] _armables;
@@ -82,8 +83,10 @@ public sealed class Watcher : IDisposable
         _level = new LevelDetector(config, Readings, Options);
         _level.Ignored += (from, to, why) => { try { LevelIgnored?.Invoke(from, to, why); } catch (Exception) { } };
         _kill = new KillDetector(config, glyphs, Readings);
+        _stall = new ExpStallDetector(config, Readings, Options, () => _level.LastLine);
+        // _stall after _level: it uses the line the level row read on this poll.
         _hudDetectors = [new AmmoDetector(config, glyphs, Readings), new FuelDetector(config, Readings, Options),
-            _kill, items, _inventory, _level];
+            _kill, items, _inventory, _level, _stall];
         ExpTest = new ExpTestRunner(config, _level.Reader);
         _unreadable = new UnreadableDetector(config, Readings, Options, () => items.BarHiddenPolls, id => _quest!.Covers(id));
         _quest = new QuestPanelDetector(config, Readings, Options, () => _unreadable.LimitSeconds,
@@ -94,6 +97,7 @@ public sealed class Watcher : IDisposable
             Math.Max(1, (int)Math.Ceiling(config.Diagnostics.RingSeconds * 1000.0 / Math.Max(1, config.PollIntervalMs))));
         _defaultThresholds[AlertIds.FuelLow] = config.Fuel.DefaultThresholdPercent;
         _defaultThresholds[AlertIds.Unreadable] = config.Unreadable.DefaultSeconds;
+        _defaultThresholds[AlertIds.ExpStall] = config.ExpStall.DefaultMinutes;
         foreach (var item in config.Items.Items) _defaultThresholds[item.Id] = item.DefaultThreshold;
         _readingText = id => Readings.Get(id).Text;
         _threshold = id => Options.Threshold(id, _defaultThresholds.GetValueOrDefault(id));
@@ -181,7 +185,7 @@ public sealed class Watcher : IDisposable
             IntPtr hwnd = _finder.Find();
             Raise(_drop.Update(hwnd != IntPtr.Zero, now));
 
-            if (hwnd == IntPtr.Zero) { _unreadable.EndSession(); _level.EndSession(); NoFrame(new(GameState.NotFound)); return; }
+            if (hwnd == IntPtr.Zero) { _unreadable.EndSession(); _level.EndSession(); _stall.EndSession(); NoFrame(new(GameState.NotFound)); return; }
 
             switch (_capture.Capture(hwnd, _frame))
             {

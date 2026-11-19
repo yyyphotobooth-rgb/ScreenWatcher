@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel, InventoryConfig Inventory, LevelConfig Level, ExpTestConfig ExpTest)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel, InventoryConfig Inventory, LevelConfig Level, ExpTestConfig ExpTest, ExpStallConfig ExpStall)
 {
     public const string FileName = "detectors.json";
 
@@ -222,6 +222,11 @@ public sealed record LevelConfig(
     string Message, int StablePolls, int MaxStep, double QuestQuietSeconds, int[] Area, int InkMin, int InkMaxSpread,
     double MinScore, double MinScoreScaled, double MinMargin, int DigitStart, int DigitPitch, int MaxDigits,
     string[] Prefix, Dictionary<string, string[]> Digits, string FontFace, int FontMinHeight, int FontMaxHeight, int MaxDigitGap, int PctMaxGap = 4);
+
+/// <summary>Row "EXP ไม่ขยับเกิน N นาที" (Detection/Hud/ExpStallDetector.cs). Message {0} = minutes.
+/// A reading (level + percentage) is stable after StablePolls equal polls; the gap between two
+/// readable polls counts only up to MaxPollGapSeconds.</summary>
+public sealed record ExpStallConfig(string Message, int DefaultMinutes, int MinMinutes, int MaxMinutes, int StablePolls, double MaxPollGapSeconds);
 
 /// <summary>"ทดสอบ EXP" (ExpTest/ExpTestRunner.cs): exp gained over a set time. Readings are the level
 /// line's level + percentage; a reading is stable when the previous poll read the same level and a

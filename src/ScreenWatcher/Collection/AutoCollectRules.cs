@@ -76,6 +76,7 @@ public sealed class AutoCollectRules
         // Message box: only rules f (its alert) and g ("?" = box not seen) apply.
         rows.Add(new(AlertIds.InventoryFull, RowKind.Status, IndexOf(config.Inventory.CropRegion)));
         rows.Add(new(AlertIds.LevelUp, RowKind.Status, IndexOf("level")));
+        rows.Add(new(AlertIds.ExpStall, RowKind.Status, IndexOf("level")));
         _rows = rows.ToArray();
     }
 

@@ -444,7 +444,7 @@
     // counts' Tahoma 11). Digits rendered at start-up for these heights; adjacent digits are 1 px
     // apart, the space before the percentage is wider.
     "fontFace": "Tahoma", "fontMinHeight": 9, "fontMaxHeight": 18, "maxDigitGap": 2,
-    // Percentage (EXP test only): blank columns allowed between its characters. At 11 px a "1"
+    // Percentage (every poll: level row text, EXP stall row, EXP test): blank columns allowed between its characters. At 11 px a "1"
     // after the dot is 3 columns away (live 2026-11-19, "3.14%"); the space before it is 7..10.
     "pctMaxGap": 4,
     // Fallback (no Tahoma match): the first version's 4x7 cells.
@@ -462,6 +462,20 @@
       "8": [ ".##..", "#..#.", "#..#.", ".##..", "#..#.", "#..#.", ".##.." ],
       "9": [ ".##..", "#..#.", "#..#.", ".###.", "...#.", "...#.", ".##.." ]
     }
+  },
+
+  "expStall": {
+    // Row "EXP ไม่ขยับเกิน N นาที" (Detection/Hud/ExpStallDetector.cs): the level line's level +
+    // percentage (read every poll, accepted only when its level agrees with the level read). The
+    // clock starts at the last stable reading where level or percentage changed and counts only
+    // polls with a readable percentage (game found, not paused); unreadable time neither counts nor
+    // resets it. Over the limit: one alert with the full client frame; re-armed by any stable change.
+    // Losing the game window or starting the app starts the clock fresh.
+    "message": "EXP ไม่ขยับมา {0} นาที ยานอาจติดอยู่",
+    "defaultMinutes": 5, "minMinutes": 1, "maxMinutes": 120,
+    "stablePolls": 2,
+    // A late poll counts up to this long; a longer gap (system stall) is not counted.
+    "maxPollGapSeconds": 5
   },
 
   "expTest": {

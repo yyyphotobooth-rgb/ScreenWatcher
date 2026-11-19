@@ -59,7 +59,7 @@ public sealed class UnreadableTests : IDisposable
     [Fact]
     public void Config_lists_every_hud_row_in_table_order_with_a_short_name()
     {
-        var hudRows = AlertRowCatalog.All.Select(r => r.Id).Where(id => id is not (AlertIds.Death or AlertIds.GameDropped or AlertIds.Unreadable));
+        var hudRows = AlertRowCatalog.All.Select(r => r.Id).Where(id => id is not (AlertIds.Death or AlertIds.GameDropped or AlertIds.Unreadable or AlertIds.ExpStall));
         Assert.Equal(hudRows, C.Unreadable.Rows.Select(r => r[0]));
         Assert.All(C.Unreadable.Rows, r => Assert.False(string.IsNullOrWhiteSpace(r[1])));
         Assert.Equal(AlertIds.Unreadable, AlertRowCatalog.All[^1].Id);   // last row in the table
