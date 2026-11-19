@@ -11,9 +11,11 @@ namespace ScreenWatcher.Detection.Hud;
 ///   Fires once; re-arms when a stable count is above the threshold again.
 /// - "หมด": the icon was seen earlier (with a readable count) and is now missing for GoneStablePolls polls while the bar
 ///   itself is visible. Fires once; re-arms when the icon is seen again.
-/// Potions: when two icons of one type are on the bar, their slots are remembered and only the
-/// side chosen in the row (left by default) is watched. If that one runs out the row does not
-/// move to the other icon by itself.
+/// Potions: when two icons of one type are on the bar (the same two slots on StablePolls polls in
+/// a row), their slots are remembered and only the side chosen in the row (left by default) is
+/// watched. If that one runs out (its slot empties) the row does not move to the other icon by
+/// itself; if a remembered slot shows a different item, the pair is forgotten. A frame with a
+/// kit the reader cannot tell apart (UncertainKits) says nothing about any potion: the rows hold.
 /// </summary>
 public sealed class ItemDetector : IHudDetector, IArmedState
 {
@@ -25,6 +27,7 @@ public sealed class ItemDetector : IHudDetector, IArmedState
         public bool Seen, ArmedLow = true, GoneFired;
         public int PresentRun, AbsentRun, HiddenRun;
         public int? SlotLeft, SlotRight;
+        public int PairLeft, PairRight, PairRun;
     }
 
     public const string GoneText = "หมด";
@@ -72,9 +75,29 @@ public sealed class ItemDetector : IHudDetector, IArmedState
             FoundItem? watched = _mine.Count > 0 ? _mine[0] : null;
             if (def.Mark is not null)
             {
-                if (_mine.Count >= 2) { st.SlotLeft = _mine[0].Slot; st.SlotRight = _mine[^1].Slot; }
-                else if (_mine.Count == 1 && st.SlotLeft is not null && _mine[0].Slot != st.SlotLeft && _mine[0].Slot != st.SlotRight)
-                    st.SlotLeft = st.SlotRight = null;      // the remaining icon sits somewhere new: one potion again
+                // Two kits of this type: only when the same two slots are seen on StablePolls polls in
+                // a row (one misread frame must not split the row; field trial 2026-11-19).
+                if (_mine.Count >= 2)
+                {
+                    if (st.PairRun > 0 && st.PairLeft == _mine[0].Slot && st.PairRight == _mine[^1].Slot) st.PairRun++;
+                    else { st.PairLeft = _mine[0].Slot; st.PairRight = _mine[^1].Slot; st.PairRun = 1; }
+                    if (st.PairRun >= _c.StablePolls) { st.SlotLeft = st.PairLeft; st.SlotRight = st.PairRight; }
+                }
+                else if (r.UncertainKits.Count == 0) st.PairRun = 0;
+                if (st.SlotLeft is not null)
+                {
+                    if (_mine.Count == 1 && _mine[0].Slot != st.SlotLeft && _mine[0].Slot != st.SlotRight)
+                        st.SlotLeft = st.SlotRight = null;  // the remaining icon sits somewhere new: one potion again
+                    else
+                        foreach (var f in r.Found)
+                            if ((f.Slot == st.SlotLeft || f.Slot == st.SlotRight) && f.ItemId != def.Id)
+                            {
+                                // A remembered slot now holds another item: the pair is not there
+                                // (anymore). An emptied slot keeps the pair, so "the chosen one ran out" still works.
+                                st.SlotLeft = st.SlotRight = null;
+                                break;
+                            }
+                }
                 if (st.SlotLeft is not null)
                 {
                     int want = (_options.WatchRight(def.Id) ? st.SlotRight : st.SlotLeft)!.Value;
@@ -104,6 +127,11 @@ public sealed class ItemDetector : IHudDetector, IArmedState
                     }
                 }
                 _readings.Set(def.Id, st.Count.Latest?.ToString() ?? RowReading.Unknown, st.Count.Value <= threshold, two);
+            }
+            else if (def.Mark is not null && r.UncertainKits.Count > 0)
+            {
+                // A kit on the bar could not be told apart on this frame (covered by the cursor):
+                // it may be this one, so this poll says nothing about the potion. Hold.
             }
             else if (r.BarVisible)
             {
@@ -147,7 +175,7 @@ public sealed class ItemDetector : IHudDetector, IArmedState
         foreach (var st in _states)
         {
             st.Count.Reset();
-            st.PresentRun = st.AbsentRun = st.HiddenRun = 0;
+            st.PresentRun = st.AbsentRun = st.HiddenRun = st.PairRun = 0;
             _readings.Set(st.Def.Id, RowReading.None, false, st.SlotLeft is not null);
         }
     }

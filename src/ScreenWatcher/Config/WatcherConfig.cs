@@ -141,7 +141,9 @@ public sealed record KillConfig(
 /// (W/2 + SlotLeft + SlotPitch * k, H + SlotTop) in the 1.0 layout; its interior is 28x28, one
 /// pixel in. Icons are looked for +-SearchPx around that (SearchPxScaled on a stretched HUD) and
 /// accepted when the mean colour difference over IconRows cells ([rowFrom, rowTo, colFrom, colTo]
-/// of the 14x14 grid) is at most IconMaxDistance. Count digits: pure white (>= CountWhiteMin)
+/// of the 14x14 grid) is at most IconMaxDistance. Potion kits: MarkCells ([rowFrom, rowTo, colFrom,
+/// colTo]) decide the type (see ItemBarReader); a kit-like slot up to KitUncertainDistance is
+/// "uncertain". Count digits: pure white (>= CountWhiteMin)
 /// pixels whose four neighbours are white or outline (<= CountDarkMax), in a box CountBoxWidth
 /// left of the icon's right edge; CountGlyphs holds the ten 8-row digit bitmaps seen at 1.0, and
 /// CountFontFace at character heights CountFontMinHeight..MaxHeight is rendered for other scales.
@@ -150,14 +152,14 @@ public sealed record KillConfig(
 public sealed record ItemsConfig(
     int StablePolls, int GoneStablePolls, string CropRegion, string LowMessage, string GoneMessage,
     int Slots, double SlotLeft, double SlotPitch, double SlotTop, int SearchPx, int SearchPxScaled,
-    double IconMaxDistance, int[][] IconRows, int MarkMinSaturation, int MarkMinCells, double MarkOrangeMinGOverR,
+    double IconMaxDistance, int[][] IconRows, int[] MarkCells, double MarkMaxDistance, double MarkMinMargin, double KitUncertainDistance,
     int CountBoxWidth, int CountBoxHeight, int CountWhiteMin, int CountDarkMax, Dictionary<string, string[]> CountGlyphs,
     string CountFontFace, int CountFontMinHeight, int CountFontMaxHeight,
     int FrameMaxR, int[] FrameG, int[] FrameB, int FrameMinRun, int FrameMinRuns,
     ItemDef[] Items);
 
 /// <summary>A watched item: alert row id, Thai name and unit, default threshold, the icon
-/// pictures (icons.json) that show it, for potions the mark colour (red / blue / orange), and
+/// pictures (icons.json) that show it, for potions the kit picture whose mark it has, and
 /// optionally its own icon distance limit (else ItemsConfig.IconMaxDistance).</summary>
 public sealed record ItemDef(string Id, string Name, string Unit, int DefaultThreshold, string[] Icons, string? Mark = null, double? MaxDistance = null);
 

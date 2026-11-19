@@ -286,9 +286,18 @@
     // centre columns below. The count covers the top rows, the hotkey digit the bottom-left and
     // the grade letter (or "FULL") the bottom.
     "iconRows": [ [ 5, 8, 0, 13 ], [ 9, 13, 6, 7 ] ],
-    // Potion kits: mark colour from cells whose max-min channel spread is at least this.
-    // Marks measured: red (233,44,42), blue (42,81,233), orange (246,163,66).
-    "markMinSaturation": 90, "markMinCells": 2, "markOrangeMinGOverR": 0.42,
+    // Potion kits: the type comes from the mark cells only (rows 5..6, cols 5..8: the cross on the
+    // box; row 4 is touched by 4-digit counts). The nearest kit picture over these cells must be
+    // within markMaxDistance and at least markMinMargin nearer than the next. Measured on 3010 kit
+    // slots (929 item crops of the 2026-11-19 field trial, grades A and C, + samples/labelled/items):
+    // right kit 0.0 (23.5 with the game's cursor over the box), next kit 43.2 or more.
+    // The old rule (mean colour of ALL saturated cells) took the game's blue mouse cursor over the
+    // red kit for a blue mark (field trial 2026-11-19 07:51:28): the cause of the false "หมด".
+    "markCells": [ 5, 6, 5, 8 ], "markMaxDistance": 30, "markMinMargin": 15,
+    // A slot this close to a kit picture but beyond iconMaxDistance is a kit with something drawn
+    // over it (the game's cursor: 32..34); it is "uncertain", not missing. No other slot content in
+    // those crops came closer than 67.
+    "kitUncertainDistance": 40,
     // Count: pure white digits on a black outline, right-aligned at the slot's top-right, up to
     // 4 digits (seen: 1733). It is Windows' Tahoma without smoothing: character height 11 px at
     // HUD scale 1.0 (digits 5x8, the "1" is 3 wide) and 15 px in the ~1.3 sample (digits 11 rows
@@ -314,9 +323,9 @@
       { "id": "ammoBox", "name": "กล่องเติมกระสุน", "unit": "กล่อง", "defaultThreshold": 5, "icons": [ "ammoBox" ] },
       { "id": "fuelBottles", "name": "ขวดน้ำมัน", "unit": "ขวด", "defaultThreshold": 2, "icons": [ "bottle" ], "maxDistance": 13 },
       { "id": "monsterCard", "name": "บัตรกันมอน", "unit": "ใบ", "defaultThreshold": 3, "icons": [ "card" ] },
-      { "id": "hpPotions", "name": "ยาเลือด", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "red" },
-      { "id": "shieldPotions", "name": "ยาเกราะ", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "blue" },
-      { "id": "spPotions", "name": "ยา SP", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "orange" }
+      { "id": "hpPotions", "name": "ยาเลือด", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "kitRed" },
+      { "id": "shieldPotions", "name": "ยาเกราะ", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "kitBlue" },
+      { "id": "spPotions", "name": "ยา SP", "unit": "ขวด", "defaultThreshold": 5, "icons": [ "kitRed", "kitBlue", "kitOrange" ], "mark": "kitOrange" }
     ]
   },
 

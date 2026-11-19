@@ -46,6 +46,10 @@ public sealed class ItemBarReading
     public List<FoundItem> Found { get; } = [];
     /// <summary>The bar itself is on screen (slot frames or a known icon seen).</summary>
     public bool BarVisible { get; set; }
+    /// <summary>Slots that hold a potion kit whose type cannot be told on this frame (something,
+    /// e.g. the game's own mouse cursor, covers the box or its mark). Nothing may be concluded
+    /// about a missing potion from such a frame.</summary>
+    public List<int> UncertainKits { get; } = [];
 }
 
 /// <summary>
@@ -53,7 +57,11 @@ public sealed class ItemBarReading
 /// ten slots) and reads the small white count at each icon's top-right.
 /// Icons: every slot's interior is compared, cell by cell, with the stored icon pictures; only the
 /// cells that the count, the hotkey digit and the grade letter never cover are used. Potion kits
-/// share one box picture, so their type comes from the colour of the mark on the box.
+/// share one box picture (grades A, B and C differ only in the letter, which is not compared), so
+/// their type comes from the mark on the box: the MarkCells alone are compared with each kit's
+/// picture, and the nearest must be close and clearly nearer than the next. A kit whose mark is
+/// covered, or a slot that is kit-like but too far off (covered by the game's cursor), is reported
+/// as uncertain instead of being guessed.
 /// Counts: the game draws them with a crisp 5x8 pixel font that is NOT stretched with the HUD, so
 /// the digits are matched pixel-exactly: pure white pixels fenced in by the black outline.
 /// </summary>
@@ -61,6 +69,9 @@ public sealed class ItemBarReader
 {
     readonly ItemsConfig _c;
     readonly (ItemDef Def, byte[] Icon)[] _icons;
+    readonly (ItemDef Def, byte[] Icon)[] _marks;
+    readonly bool[] _cellMark = new bool[IconSet.Cells * IconSet.Cells];
+    readonly int _cellsMark;
     readonly CountFont _font;
     char[] _key = [];
     readonly bool[] _cellUsed = new bool[IconSet.Cells * IconSet.Cells];
@@ -75,14 +86,25 @@ public sealed class ItemBarReader
         _font = font ?? CountFont.Render(config.CountFontFace, config.CountFontMinHeight, config.CountFontMaxHeight, config.CountGlyphs);
         _icons = config.Items.SelectMany(d => d.Icons.Select(i =>
             (d, icons.Icons.TryGetValue(i, out var px) ? px : throw new InvalidDataException($"items: no icon '{i}' in {IconSet.FileName}")))).ToArray();
+        _marks = config.Items.Where(d => d.Mark is not null).Select(d =>
+            (d, icons.Icons.TryGetValue(d.Mark!, out var px) ? px : throw new InvalidDataException($"items: no icon '{d.Mark}' in {IconSet.FileName}"))).ToArray();
+        var m = config.MarkCells;
         for (int cy = 0; cy < IconSet.Cells; cy++)
             for (int cx = 0; cx < IconSet.Cells; cx++)
+            {
                 if (_cellUsed[cy * IconSet.Cells + cx] = config.IconRows.Any(r => cy >= r[0] && cy <= r[1] && cx >= r[2] && cx <= r[3])) _cellsUsed++;
+                if (_cellMark[cy * IconSet.Cells + cx] = cy >= m[0] && cy <= m[1] && cx >= m[2] && cx <= m[3])
+                {
+                    if (!_cellUsed[cy * IconSet.Cells + cx]) throw new InvalidDataException("items: markCells must lie inside iconRows");
+                    _cellsMark++;
+                }
+            }
     }
 
     public void Read(Frame frame, HudScale scale, ItemBarReading result)
     {
         result.Found.Clear();
+        result.UncertainKits.Clear();
         var s = HudLayout.Snap(scale);
         bool exact = s.X == 1 && s.Y == 1;
         double cx = frame.Width / 2.0;
@@ -107,14 +129,19 @@ public sealed class ItemBarReader
                 }
             if (best < 0) continue;
             var def = _icons[best].Def;
-            if (bestD > (def.MaxDistance ?? _c.IconMaxDistance)) continue;
+            if (bestD > (def.MaxDistance ?? _c.IconMaxDistance))
+            {
+                // Kit-like but too far off: a kit with something drawn over it (no other slot
+                // content comes this close to the kit pictures).
+                if (def.Mark is not null && bestD <= _c.KitUncertainDistance) result.UncertainKits.Add(k);
+                continue;
+            }
             if (def.Mark is not null)
             {
-                // Potion kit: the type is the colour of the mark on the box.
+                // Potion kit: the type is the mark on the box.
                 SampleCells(frame, bestX, bestY, s, exact);
-                string? mark = MarkColour();
-                var potion = _c.Items.FirstOrDefault(o => o.Mark is not null && o.Mark == mark);
-                if (potion is null) continue;
+                var potion = MarkType();
+                if (potion is null) { result.UncertainKits.Add(k); continue; }
                 def = potion;
             }
             int right = bestX + (int)Math.Round(28 * s.X);
@@ -171,20 +198,26 @@ public sealed class ItemBarReader
         return (double)d / (_cellsUsed * 3);
     }
 
-    /// <summary>"red", "blue" or "orange" from the strongly coloured cells of the kit's mark; null if none.</summary>
-    string? MarkColour()
+    /// <summary>The potion whose kit picture is nearest over the mark cells, if it is within
+    /// MarkMaxDistance and at least MarkMinMargin nearer than the next one; else null.</summary>
+    ItemDef? MarkType()
     {
-        int r = 0, g = 0, b = 0, n = 0;
-        for (int c = 0; c < _cellUsed.Length; c++)
+        ItemDef? best = null;
+        double bestD = double.MaxValue, second = double.MaxValue;
+        foreach (var (def, icon) in _marks)
         {
-            if (!_cellUsed[c]) continue;
-            int o = c * 3, max = Math.Max(_cell[o], Math.Max(_cell[o + 1], _cell[o + 2])), min = Math.Min(_cell[o], Math.Min(_cell[o + 1], _cell[o + 2]));
-            if (max - min < _c.MarkMinSaturation) continue;
-            r += _cell[o]; g += _cell[o + 1]; b += _cell[o + 2]; n++;
+            int d = 0;
+            for (int c = 0; c < _cellMark.Length; c++)
+            {
+                if (!_cellMark[c]) continue;
+                int o = c * 3;
+                d += Math.Abs(_cell[o] - icon[o]) + Math.Abs(_cell[o + 1] - icon[o + 1]) + Math.Abs(_cell[o + 2] - icon[o + 2]);
+            }
+            double dd = (double)d / (_cellsMark * 3);
+            if (dd < bestD) { second = bestD; bestD = dd; best = def; }
+            else if (dd < second) second = dd;
         }
-        if (n < _c.MarkMinCells) return null;
-        if (b > r) return "blue";
-        return g < r * _c.MarkOrangeMinGOverR ? "red" : "orange";
+        return bestD <= _c.MarkMaxDistance && second - bestD >= _c.MarkMinMargin ? best : null;
     }
 
     /// <summary>Reads the count whose right end sits at the icon's top-right (native pixels).</summary>
