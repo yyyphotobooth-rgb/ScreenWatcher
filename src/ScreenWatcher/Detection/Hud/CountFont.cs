@@ -52,6 +52,42 @@ public sealed class CountFont
         return new CountFont(map);
     }
 
+    /// <summary>A whole line of text (Thai shaping included) at the given character height, no
+    /// smoothing, cropped to its ink: [row, column] = pixel drawn. Empty when nothing was drawn.</summary>
+    public static bool[,] TextMask(string face, int charHeight, string text)
+    {
+        using var bmp = new Bitmap(Math.Max(64, charHeight * text.Length + 40), charHeight * 3 + 20, PixelFormat.Format32bppRgb);
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.Clear(Color.Black);
+            IntPtr hdc = g.GetHdc();
+            IntPtr font = CreateFontW(-charHeight, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 3, 0, face);
+            try
+            {
+                IntPtr old = SelectObject(hdc, font);
+                SetTextColor(hdc, 0xFFFFFF);
+                SetBkColor(hdc, 0);
+                TextOutW(hdc, 10, charHeight, text, text.Length);
+                SelectObject(hdc, old);
+            }
+            finally
+            {
+                DeleteObject(font);
+                g.ReleaseHdc(hdc);
+            }
+        }
+        int x0 = int.MaxValue, x1 = -1, y0 = int.MaxValue, y1 = -1;
+        for (int y = 0; y < bmp.Height; y++)
+            for (int x = 0; x < bmp.Width; x++)
+                if (bmp.GetPixel(x, y).R > 128) { x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); y0 = Math.Min(y0, y); y1 = Math.Max(y1, y); }
+        if (x1 < 0) return new bool[0, 0];
+        var m = new bool[y1 - y0 + 1, x1 - x0 + 1];
+        for (int y = y0; y <= y1; y++)
+            for (int x = x0; x <= x1; x++)
+                m[y - y0, x - x0] = bmp.GetPixel(x, y).R > 128;
+        return m;
+    }
+
     /// <summary>One character's bitmap at the given character height, or null if nothing was drawn.</summary>
     public static string? Glyph(string face, int charHeight, char ch)
     {

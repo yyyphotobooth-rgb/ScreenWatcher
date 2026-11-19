@@ -56,7 +56,7 @@ public sealed class DataCollector : IDisposable
         _store = store;
         var gap = TimeSpan.FromSeconds(config.MinSecondsBetweenSaves);
         var beat = TimeSpan.FromSeconds(config.HeartbeatSeconds);
-        _regions = config.Regions.Select(r => new RegionState(new CollectRegion(r), new SaveSchedule(gap, beat))).ToArray();
+        _regions = config.AllRegions.Select(r => new RegionState(new CollectRegion(r), new SaveSchedule(gap, beat))).ToArray();
         var period = TimeSpan.FromMinutes(config.FullFrameMinutes);
         _fullFrame = new SaveSchedule(period, period);
         _autoIndex = _regions.Select(r => auto?.IndexOf(r.Region.Name) ?? -1).ToArray();

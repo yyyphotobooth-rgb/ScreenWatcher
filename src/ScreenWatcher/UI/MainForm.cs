@@ -109,7 +109,8 @@ public sealed class MainForm : Form
         _diag.Evidence.Start();
         _bot = new DiscordBot(_log,
             new SsCommandHandler(_watcher.Snapshot, () => _bot!.ChosenChannelId, o => _diag.OnCommand(SsCommandHandler.CommandName, o)),
-            new MissCommandHandler(_diag.RecordMiss, () => _bot!.ChosenChannelId, o => _diag.OnCommand(MissCommandHandler.CommandName, o)))
+            new MissCommandHandler(_diag.RecordMiss, () => _bot!.ChosenChannelId, o => _diag.OnCommand(MissCommandHandler.CommandName, o)),
+            new ResetCommandHandler(_watcher.ResetInventoryFull, () => _bot!.ChosenChannelId, o => _diag.OnCommand(ResetCommandHandler.CommandName, o)))
         {
             ChosenGuildId = _settings.DiscordGuildId,
             ChosenChannelId = _settings.DiscordChannelId,
@@ -226,6 +227,13 @@ public sealed class MainForm : Form
                         _diag.OnSetting($"alert.{r.Spec.Id}.threshold", v);
                     };
                 }
+                if (spec.ResetButton)
+                    row.ResetClicked += _ =>
+                    {
+                        bool was = _watcher.ResetInventoryFull();
+                        _log.Write($"Inventory full reset (button; was latched: {was})");
+                        _diag.OnCommand("reset", was ? "button_reset" : "button_not_latched");
+                    };
                 if (spec.SideChooser)
                 {
                     row.WatchRight = _settings.WatchRight.GetValueOrDefault(spec.Id);
@@ -561,6 +569,7 @@ public sealed class MainForm : Form
                     r.SetReached(now.Reached);
                     r.SetChooserVisible(now.TwoFound);
                     if (r.Spec.Id == AlertIds.Unreadable) r.SetNowList(now.Text, now.Text is "ปกติ" or "—" ? null : Theme.WarnValue);
+                    else if (r.Spec.Id == AlertIds.InventoryFull) r.SetNow(now.Text, now.Reached ? Theme.WarnValue : null);
                     else r.SetNow(now.Text);
                     if (_noSend)
                     {
@@ -831,7 +840,7 @@ public sealed class MainForm : Form
             store.Start();
             if (mode == CollectMode.Auto)
             {
-                var rules = new AutoCollectRules(_config, c.Regions.Select(r => r.Name).ToArray());
+                var rules = new AutoCollectRules(_config, c.AllRegions.Select(r => r.Name).ToArray());
                 next = new DataCollector(c, store, rules, _watcher.Ring, _config.Diagnostics.Auto.PreSeconds,
                     _config.Diagnostics.Auto.UnreadableFullFrameRepeatSeconds);
                 next.AutoChanged += _diag.OnAutoCollect;

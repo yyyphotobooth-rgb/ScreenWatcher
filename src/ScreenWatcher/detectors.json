@@ -182,6 +182,19 @@
           { "name": "text", "min": [ 215, 215, 215 ], "max": [ 229, 229, 229 ], "outlineMax": 75 } // exactly (222,222,222)
         ]
       }
+    ],
+    // Collected and used for alert crops like the regions above, but NOT kept in the in-memory
+    // HUD ring (/miss, auto "pre" crops): the ring stays within its 8 MB budget at 1600x1024.
+    "unbufferedRegions": [
+      // System message box (bottom right): text lines from W-330, y H-159..H-63; the framed box's
+      // title at H-178. Yellow phrase (246,255,0) and green (0,255,0) text with a black outline.
+      {
+        "name": "msgbox", "anchor": "bottomRight", "rect": [ -340, -192, 340, 150 ],
+        "keys": [
+          { "name": "yellow text", "min": [ 230, 240, 0 ], "max": [ 255, 255, 40 ], "outlineMax": 20 },
+          { "name": "green text", "min": [ 0, 235, 0 ], "max": [ 40, 255, 40 ], "outlineMax": 20 }
+        ]
+      }
     ]
   },
 
@@ -343,8 +356,56 @@
       [ "gunAmmoEmpty", "ปืนกล" ], [ "missileEmpty", "มิสไซล์" ], [ "ammoBox", "กล่องกระสุน" ],
       [ "fuelLow", "น้ำมัน" ], [ "fuelBottles", "ขวดน้ำมัน" ], [ "monsterCard", "บัตรกันมอน" ],
       [ "hpPotions", "ยาเลือด" ], [ "shieldPotions", "ยาเกราะ" ], [ "spPotions", "ยา SP" ],
-      [ "kill300", "นับมอน" ]
+      [ "kill300", "นับมอน" ], [ "inventoryFull", "กล่องข้อความระบบ" ]
     ]
+  },
+
+  "inventory": {
+    // Row "ช่องเก็บของเต็ม" (Detection/Hud/InventoryDetector.cs). The game prints the phrase below in
+    // yellow in the system message box (bottom right). Measured (field trial 2026-11-19,
+    // samples/field-2026-11-19/inventory_full_message.png, 1024x768): the text is Windows' Tahoma,
+    // character height 12 px, no smoothing, pure (246,255,0) with a (0,0,0) outline; a rendering of
+    // the phrase matches all 2478 pixels of its box. Item counts are the same font at 11 px; at HUD
+    // scale ~1.3 the counts are 15 px, so heights fontMinHeight..fontMaxHeight are rendered at
+    // start-up and any of them may match. Lines scroll: the whole text area is searched.
+    "message": "ช่องเก็บของเต็ม",
+    "phrase": "ช่องเก็บของของคุณมีพื้นที่ไม่เพียงพอ",
+    "fontFace": "Tahoma", "fontMinHeight": 11, "fontMaxHeight": 18,
+    "okText": "ปกติ", "fullText": "เต็ม (รอรีเซ็ต)",
+    "cropRegion": "msgbox",
+    // Text area, bottomRight anchor, 1.0 layout [x, y, w, h]: lines start at W-330 and lie in
+    // H-159..H-63, with the window frame (1024x768 trial frames) and without it (older samples:
+    // text straight over the scene, same place; also 1600x1024 and 1920x1080).
+    "textArea": [ -340, -192, 336, 150 ],
+    // Yellow phrase pixels; green (0,255,0) is the other message colour.
+    "yellowMin": [ 230, 240, 0 ], "yellowMax": [ 255, 255, 40 ],
+    "greenMin": [ 0, 235, 0 ], "greenMax": [ 40, 255, 40 ],
+    // Share of the phrase box's pixels allowed to differ (0 at 1.0 in the sample).
+    "maxMismatch": 0.01,
+    // Frameless box: "seen" only while it shows at least this many text pixels.
+    "textMinPixels": 40,
+    // "SYSTEM MESSAGE" title of the framed box: mask box top-left at (W-324, H-178), searched
+    // +-titleSearch px. Majority of 16 framed 1024x768 frames (3 of them show the box a few px off):
+    // '#' where at least 12 are bright, '.' where at most 4, else either.
+    "titleAt": [ -324, -178 ], "titleSearch": 3, "titleDelta": 40, "titleMinMatch": 0.9, "titleMinMatchScaled": 0.85,
+    "titleMask": [
+        "..............................................................................?...??.??.?.................................................................",
+        "...........................................................................?........?.?...................................................................",
+        "##########.###.....###..##########.###########.#########################.......#############..###########.##########?.##########..##########..##########.?",
+        "##############?....###.###########.###########.#########################.......#################################################.###########.###########.#",
+        "##########.####....###.###########..##########.##########################......#########################?###########?###########.###########.###########.#",
+        "##########.###########.##########?.....###.....###.######?####..###..####......###??###??########?######.###########?###########?###########?####......??#",
+        "######################.###########.....###.....###?###########..###??####......###??###??########?######.?##########?###########?###########?####?...###?#",
+        ".......####..########..........###.....###.....###?.??...?####..###..####......###..###..########?#???.?...?.?..?####.?.???..###?###########.####?...###?#",
+        "##########.....####....###########.....###.....###############..###..####......###..###..#######################################?###.....###?###########.#",
+        "##########.....###?....###########.....###.....###############..###..###?......###..###..####.######################.###########.###.....###.?##########.#",
+        "....................................................................................................????..................................................",
+        ".........................................................................................................................................................."
+      ],
+    // Framed box not seen (no title, no text) on this many polls in a row: the row shows "?"
+    // (the "อ่านค่าไม่ได้" row reports it as "กล่องข้อความระบบ"). A frameless box without text is
+    // indistinguishable from an empty one: no news, the row keeps its value.
+    "missingPolls": 3
   },
 
   "questPanel": {

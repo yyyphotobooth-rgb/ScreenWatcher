@@ -111,6 +111,6 @@ public sealed class StableValue<T>(int polls) where T : struct, IEquatable<T>
 static class HudCrop
 {
     public static CollectRegion Region(WatcherConfig config, string name) =>
-        new(config.Collect.Regions.FirstOrDefault(r => r.Name == name)
+        new(config.Collect.AllRegions.FirstOrDefault(r => r.Name == name)
             ?? throw new InvalidDataException($"cropRegion: no collect region named '{name}'"));
 }

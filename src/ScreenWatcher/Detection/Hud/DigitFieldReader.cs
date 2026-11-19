@@ -163,14 +163,14 @@ public static class HudLayout
     public static double AnchorX(HudAnchor a, int width) => a switch
     {
         HudAnchor.TopLeft => 0,
-        HudAnchor.TopRight => width,
+        HudAnchor.TopRight or HudAnchor.BottomRight => width,
         _ => width / 2.0,
     };
 
     public static double AnchorY(HudAnchor a, int height) => a switch
     {
         HudAnchor.TopLeft or HudAnchor.TopRight => 0,
-        HudAnchor.BottomCenter => height,
+        HudAnchor.BottomCenter or HudAnchor.BottomRight => height,
         _ => height / 2.0,
     };
 }

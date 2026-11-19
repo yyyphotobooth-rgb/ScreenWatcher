@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel, InventoryConfig Inventory)
 {
     public const string FileName = "detectors.json";
 
@@ -78,7 +78,13 @@ public sealed record CollectConfig(
     double FullFrameMinutes,
     int QueueLimit,
     ChangeConfig Change,
-    CollectRegionConfig[] Regions);
+    CollectRegionConfig[] Regions,
+    CollectRegionConfig[]? UnbufferedRegions = null)
+{
+    /// <summary>Regions collected and used for alert crops: Regions (also kept in the in-memory
+    /// HUD ring) then UnbufferedRegions (not in the ring, which has an 8 MB budget).</summary>
+    public IEnumerable<CollectRegionConfig> AllRegions => Regions.Concat(UnbufferedRegions ?? []);
+}
 
 /// <summary>Collect change test, see Collection/HudSignature.cs. A region changed when at least
 /// MinChangedPixels (at 1.0 scale; scaled by area) changed HUD colour-key class versus the last
@@ -195,3 +201,12 @@ public sealed record QuestPanelConfig(
     double CheckY, int SearchY, double SearchFromWidth, double XOffset, int BrightDelta, double MinMatch, double MinMatchScaled,
     double LineDy, double[] LineDx, int LineMinContrast, double LineMinShare,
     string[] CheckMask, string[] CloseMask);
+
+/// <summary>Row "ช่องเก็บของเต็ม" (Detection/Hud/InventoryDetector.cs, SystemMessage.cs). TextArea and
+/// TitleAt are bottomRight-anchored 1.0-layout offsets ([x, y, w, h] / [x, y]); colours are RGB
+/// boxes; the phrase is rendered in FontFace at FontMinHeight..FontMaxHeight and may differ from
+/// the yellow pixels in at most MaxMismatch of its box.</summary>
+public sealed record InventoryConfig(
+    string Message, string Phrase, string FontFace, int FontMinHeight, int FontMaxHeight, string OkText, string FullText, string CropRegion,
+    int[] TextArea, int[] YellowMin, int[] YellowMax, int[] GreenMin, int[] GreenMax, double MaxMismatch, int TextMinPixels,
+    int[] TitleAt, int TitleSearch, int TitleDelta, double TitleMinMatch, double TitleMinMatchScaled, string[] TitleMask, int MissingPolls);

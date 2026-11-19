@@ -29,7 +29,7 @@ public sealed class AutoCollectRules
     public const string FuelLow = "fuel_low", HudScaleRule = "hud_scale", KillNear = "kill_near", ItemNear = "item_near",
         AmmoLow = "ammo_low", Alert = "alert", Unknown = "unknown", Jump = "jump";
 
-    enum RowKind { Fuel, Kill, Item, Ammo }
+    enum RowKind { Fuel, Kill, Item, Ammo, Status }
 
     sealed class Row(string id, RowKind kind, int region)
     {
@@ -73,6 +73,8 @@ public sealed class AutoCollectRules
             new(AlertIds.MissileEmpty, RowKind.Ammo, IndexOf(config.Ammo.CropRegion)),
         };
         foreach (var item in config.Items.Items) rows.Add(new(item.Id, RowKind.Item, IndexOf(config.Items.CropRegion)));
+        // Message box: only rules f (its alert) and g ("?" = box not seen) apply.
+        rows.Add(new(AlertIds.InventoryFull, RowKind.Status, IndexOf(config.Inventory.CropRegion)));
         _rows = rows.ToArray();
     }
 

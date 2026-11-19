@@ -34,17 +34,19 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
     readonly AppLog _log;
     readonly SsCommandHandler _ss;
     readonly MissCommandHandler? _miss;
+    readonly ResetCommandHandler? _reset;
     readonly SemaphoreSlim _connectGate = new(1, 1);
     DiscordSocketClient? _client;
     BotStatus _status = new(BotState.NotSetUp);
     ulong? _registeredGuild;
     bool _stopping;
 
-    public DiscordBot(AppLog log, SsCommandHandler ss, MissCommandHandler? miss = null)
+    public DiscordBot(AppLog log, SsCommandHandler ss, MissCommandHandler? miss = null, ResetCommandHandler? reset = null)
     {
         _log = log;
         _ss = ss;
         _miss = miss;
+        _reset = reset;
     }
 
     /// <summary>A Discord problem worth keeping in the journal (library warnings/errors, login or
@@ -142,7 +144,7 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
         try { ChannelsChanged?.Invoke(); } catch (Exception ex) { _log.Write("ChannelsChanged handler", ex); }
     }
 
-    /// <summary>Registers /ss (and /miss) for the chosen server only (guild commands appear immediately).</summary>
+    /// <summary>Registers /ss (and /miss, /reset) for the chosen server only (guild commands appear immediately).</summary>
     public async Task EnsureSlashCommandAsync()
     {
         var client = _client;
@@ -161,8 +163,13 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
                     .WithDescription(MissCommandHandler.CommandDescription)
                     .AddOption(MissCommandHandler.NoteOption, ApplicationCommandOptionType.String, MissCommandHandler.NoteDescription, isRequired: false)
                     .Build());
+            if (_reset is not null)
+                await guild.CreateApplicationCommandAsync(new SlashCommandBuilder()
+                    .WithName(ResetCommandHandler.CommandName)
+                    .WithDescription(ResetCommandHandler.CommandDescription)
+                    .Build());
             _registeredGuild = gid;
-            _log.Write($"/ss{(_miss is null ? "" : " and /miss")} registered for server {gid}");
+            _log.Write($"/ss{(_miss is null ? "" : ", /miss")}{(_reset is null ? "" : ", /reset")} registered for server {gid}");
         }
         catch (Exception ex)
         {
@@ -176,7 +183,9 @@ public sealed class DiscordBot : IAlertSink, IAsyncDisposable
         try
         {
             var i = new SocketSlashAdapter(cmd);
-            if (!await _ss.HandleAsync(i) && _miss is not null) await _miss.HandleAsync(i);
+            if (await _ss.HandleAsync(i)) return;
+            if (_miss is not null && await _miss.HandleAsync(i)) return;
+            if (_reset is not null) await _reset.HandleAsync(i);
         }
         catch (Exception ex)
         {

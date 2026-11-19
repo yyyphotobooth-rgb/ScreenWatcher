@@ -17,38 +17,16 @@ namespace ScreenWatcher.Detection.Hud;
 public sealed class QuestPanelFinder
 {
     readonly QuestPanelConfig _c;
-    readonly sbyte[] _check, _close;   // 1 = glyph, 0 = band, -1 = don't care
+    readonly BrightGlyph _check, _close;
     readonly int _w, _h;
 
     public QuestPanelFinder(QuestPanelConfig config)
     {
         _c = config;
-        (_check, _w, _h) = Parse(config.CheckMask);
-        int w2, h2;
-        (_close, w2, h2) = Parse(config.CloseMask);
-        if (w2 != _w || h2 != _h) throw new InvalidDataException("questPanel: checkMask and closeMask must be the same size");
-        _checkKeys = Keys(_check);
-        _closeKeys = Keys(_close);
-    }
-
-    readonly int[] _checkKeys, _closeKeys;
-
-    /// <summary>Six glyph cells spread over the mask, for the quick reject.</summary>
-    static int[] Keys(sbyte[] mask)
-    {
-        var on = Enumerable.Range(0, mask.Length).Where(i => mask[i] == 1).ToArray();
-        return [.. Enumerable.Range(0, 6).Select(k => on[k * (on.Length - 1) / 5])];
-    }
-
-    static (sbyte[] Mask, int W, int H) Parse(string[] rows)
-    {
-        int w = rows[0].Length, h = rows.Length;
-        if (rows.Any(r => r.Length != w)) throw new InvalidDataException("questPanel: mask rows must have one length");
-        var m = new sbyte[w * h];
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-                m[y * w + x] = rows[y][x] switch { '#' => 1, '.' => 0, _ => -1 };
-        return (m, w, h);
+        _check = new BrightGlyph(config.CheckMask);
+        _close = new BrightGlyph(config.CloseMask);
+        if (_close.W != _check.W || _close.H != _check.H) throw new InvalidDataException("questPanel: checkMask and closeMask must be the same size");
+        (_w, _h) = (_check.W, _check.H);
     }
 
     /// <summary>Last match (native pixels of the check box's top-left), for logs and tests.</summary>
@@ -81,47 +59,8 @@ public sealed class QuestPanelFinder
 
     static int Lum(ReadOnlySpan<byte> px, int i) => (px[i + 2] * 3 + px[i + 1] * 6 + px[i]) / 10;
 
-    bool Glyph(Frame f, int x, int y, HudScale s, sbyte[] mask)
-    {
-        var px = f.Pixels;
-        int bw = (int)Math.Round(_w * s.X), bh = (int)Math.Round(_h * s.Y);
-        // Quick reject (most positions): a few glyph cells must stand out from the box corners.
-        int corners = (Lum(px, (y * f.Width + x) * 4) + Lum(px, (y * f.Width + x + bw - 1) * 4) +
-                       Lum(px, ((y + bh - 1) * f.Width + x) * 4) + Lum(px, ((y + bh - 1) * f.Width + x + bw - 1) * 4)) / 4;
-        foreach (int k in mask == _check ? _checkKeys : _closeKeys)
-        {
-            int ky = y + (int)((k / _w) * s.Y + 0.5 * (s.Y - 1)), kx = x + (int)((k % _w) * s.X + 0.5 * (s.X - 1));
-            if (Lum(px, (ky * f.Width + kx) * 4) < corners + _c.BrightDelta / 2) return false;
-        }
-        // Band level: mean luminance of the box's border (the glyphs never touch it).
-        long sum = 0; int n = 0;
-        for (int xx = x; xx < x + bw; xx++)
-        {
-            sum += Lum(px, (y * f.Width + xx) * 4) + Lum(px, ((y + bh - 1) * f.Width + xx) * 4); n += 2;
-        }
-        for (int yy = y + 1; yy < y + bh - 1; yy++)
-        {
-            sum += Lum(px, (yy * f.Width + x) * 4) + Lum(px, (yy * f.Width + x + bw - 1) * 4); n += 2;
-        }
-        int cut = (int)(sum / n) + _c.BrightDelta;
-        int good = 0, total = 0, glyphHit = 0, glyphAll = 0;
-        for (int ty = 0; ty < _h; ty++)
-        {
-            int yy = y + (int)(ty * s.Y + 0.5 * (s.Y - 1));
-            for (int tx = 0; tx < _w; tx++)
-            {
-                int m = mask[ty * _w + tx];
-                if (m < 0) continue;
-                int xx = x + (int)(tx * s.X + 0.5 * (s.X - 1));
-                bool on = Lum(px, (yy * f.Width + xx) * 4) >= cut;
-                total++;
-                if (on == (m == 1)) good++;
-                if (m == 1) { glyphAll++; if (on) glyphHit++; }
-            }
-        }
-        double min = s.X == 1 && s.Y == 1 ? _c.MinMatch : _c.MinMatchScaled;
-        return good >= min * total && glyphHit >= min * glyphAll;
-    }
+    bool Glyph(Frame f, int x, int y, HudScale s, BrightGlyph g) =>
+        g.Match(f, x, y, s, _c.BrightDelta, s.X == 1 && s.Y == 1 ? _c.MinMatch : _c.MinMatchScaled);
 
     bool PortraitLine(Frame f, int x, int y, HudScale s)
     {

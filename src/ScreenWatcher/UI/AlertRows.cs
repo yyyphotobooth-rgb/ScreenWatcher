@@ -10,7 +10,7 @@ namespace ScreenWatcher.UI;
 /// show the ซ้าย/ขวา chooser (two icons of the same potion type on the item bar).
 /// </summary>
 public sealed record AlertRowSpec(string Id, string Label, bool Implemented, string? Unit = null, int? DefaultThreshold = null,
-    int MaxThreshold = 9999, bool SideChooser = false, int MinThreshold = 0);
+    int MaxThreshold = 9999, bool SideChooser = false, int MinThreshold = 0, bool ResetButton = false);
 
 public static class AlertRowCatalog
 {
@@ -29,6 +29,8 @@ public static class AlertRowCatalog
         new(AlertIds.ShieldPotions, "ยาเกราะเหลือ", Implemented: true, "ขวด", 5, SideChooser: true),
         new(AlertIds.SpPotions, "ยา SP เหลือ", Implemented: true, "ขวด", 5, SideChooser: true),
         new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: true),
+        // "ตอนนี้": ปกติ / เต็ม (รอรีเซ็ต) (latched until "รีเซ็ต" or /reset) / ? (message box not seen).
+        new(AlertIds.InventoryFull, "ช่องเก็บของเต็ม", Implemented: true, ResetButton: true),
         // "ตอนนี้": ปกติ, or the short names of the rows over the limit (detectors.json "unreadable").
         new(AlertIds.Unreadable, "อ่านค่าไม่ได้เกิน", Implemented: true, "วินาที", 10, MaxThreshold: 3600, MinThreshold: 1),
     ];
@@ -52,6 +54,7 @@ sealed class AlertRow : Control
     readonly Label _right = new() { AutoSize = false, TextAlign = ContentAlignment.MiddleCenter, Text = "ขวา", Visible = false, UseMnemonic = false, Cursor = Cursors.Hand };
     readonly InputBox? _threshold;
     readonly Label? _unit;
+    readonly Label? _reset;
     readonly Label _now = new() { AutoSize = false, TextAlign = ContentAlignment.MiddleRight, UseMnemonic = false };
     bool _reachedOn, _chooserOn, _watchRight;
     int _thresholdValue;
@@ -66,6 +69,8 @@ sealed class AlertRow : Control
     public event Action<AlertRow, int>? ThresholdChanged;
     /// <summary>User picked ซ้าย (false) or ขวา (true).</summary>
     public event Action<AlertRow, bool>? SideChanged;
+    /// <summary>User clicked "รีเซ็ต" (rows with ResetButton).</summary>
+    public event Action<AlertRow>? ResetClicked;
 
     public AlertRow(AlertRowSpec spec)
     {
@@ -101,6 +106,17 @@ sealed class AlertRow : Control
                 _threshold.Box.TextChanged += (_, _) => OnThresholdText();
                 _threshold.Box.Leave += (_, _) => _threshold.Box.Text = _thresholdValue.ToString();
             }
+        }
+
+        if (spec.ResetButton)
+        {
+            _reset = new Label
+            {
+                AutoSize = false, Text = "รีเซ็ต", Font = Theme.Small, TextAlign = ContentAlignment.MiddleCenter, UseMnemonic = false,
+                Cursor = Cursors.Hand, AccessibleName = spec.Label + " (รีเซ็ต)", AccessibleRole = AccessibleRole.PushButton,
+            };
+            _reset.Click += (_, _) => ResetClicked?.Invoke(this);
+            Controls.Add(_reset);
         }
 
         if (spec.Implemented)
@@ -210,6 +226,7 @@ sealed class AlertRow : Control
         _reached.ForeColor = Theme.WarnText;
         _now.ForeColor = _reachedOn ? Theme.WarnValue : live ? Theme.Text : Theme.Disabled;
         if (_unit is not null) _unit.ForeColor = _reachedOn ? Theme.WarnText : live ? Theme.Muted : Theme.Disabled;
+        if (_reset is not null) (_reset.BackColor, _reset.ForeColor) = (Theme.Primary, Theme.Text);
         if (_threshold is not null) { _threshold.BorderColor = _reachedOn ? Theme.WarnBorder : Theme.InputBorder; _threshold.Invalidate(); }
         // Chooser: the picked side is a filled pill, the other plain text.
         (_left.BackColor, _left.ForeColor) = !_watchRight ? (Theme.Primary, Theme.Text) : (bg, Theme.Muted);
@@ -231,7 +248,15 @@ sealed class AlertRow : Control
         int nowX = Width - pad - nowW;
         _now.SetBounds(nowX, 0, nowW, h);
         int labelRight = nowX - gap;
-        if (_threshold is not null)
+        if (_reset is not null)
+        {
+            // "รีเซ็ต" in the threshold column; "ตอนนี้" takes the rest of it ("เต็ม (รอรีเซ็ต)" is long).
+            int tx = nowX - gap - thrW, bw = S(56);
+            _reset.SetBounds(tx, (h - S(28)) / 2, bw, S(28));
+            _now.SetBounds(tx + bw + S(6), 0, Width - pad - (tx + bw + S(6)), h);
+            labelRight = tx - gap;
+        }
+        else if (_threshold is not null)
         {
             int tx = nowX - gap - thrW;
             _threshold.SetBounds(tx, (h - S(32)) / 2, S(52), S(32));

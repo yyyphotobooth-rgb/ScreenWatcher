@@ -4,7 +4,7 @@ using ScreenWatcher.Detection;
 
 namespace ScreenWatcher.Collection;
 
-public enum HudAnchor { TopLeft, TopRight, BottomCenter, Center }
+public enum HudAnchor { TopLeft, TopRight, BottomCenter, Center, BottomRight }
 
 /// <summary>A collect region: config rect (1.0 layout, offset from an anchor) mapped onto a client.</summary>
 public sealed class CollectRegion
@@ -38,6 +38,7 @@ public sealed class CollectRegion
             HudAnchor.TopLeft => (0.0, 0.0),
             HudAnchor.TopRight => (clientWidth, 0.0),
             HudAnchor.BottomCenter => (clientWidth / 2.0, clientHeight),
+            HudAnchor.BottomRight => (clientWidth, clientHeight),
             _ => (clientWidth / 2.0, clientHeight / 2.0),
         };
         int x = (int)Math.Round(ax + _rect[0] * scale.X);

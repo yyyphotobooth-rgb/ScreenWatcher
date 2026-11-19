@@ -25,7 +25,10 @@ Discord bot (Discord.Net, runs inside the app).
   counters, fuel arc, kill counter, item bar. Digit shapes for ammo/kill are in `glyphs.json`, item
   icons in `icons.json` (both built from the labelled crops in `samples/labelled`); item counts are
   Tahoma digits rendered at start-up (`CountFont.cs`). Readings measured so far and what is still
-  unverified: `samples/README.md`.
+  unverified: `samples/README.md`. Also here: the level-up quest panel (`QuestPanel*.cs`, its own
+  message instead of the generic unreadable one) and the system message box (`SystemMessage.cs`,
+  `InventoryDetector.cs`: row "ช่องเก็บของเต็ม", phrase matched as Tahoma 12 px, latched until the
+  row's "รีเซ็ต" button or Discord /reset).
 - `src/ScreenWatcher/Collection`: optional "Collect data" mode (HUD crops + full frames saved to
   %LOCALAPPDATA%\ScreenWatcher\collect, size-capped; writes on a background thread).
 - `src/ScreenWatcher/Diagnostics`: field-trial diagnostics, all under %LOCALAPPDATA%\ScreenWatcher:
@@ -35,7 +38,7 @@ Discord bot (Discord.Net, runs inside the app).
   detectors.json `diagnostics`.
 - `src/ScreenWatcher/Alerts`: event -> Thai text + PNG (death: full client frame; HUD rows: crop of
   that HUD part), queued and sent with retries.
-- `src/ScreenWatcher/Bot`: Discord bot (Guilds intent only, slash command /ss). Token DPAPI-encrypted
+- `src/ScreenWatcher/Bot`: Discord bot (Guilds intent only, slash commands /ss, /miss, /reset). Token DPAPI-encrypted
   (`Config/TokenStore.cs`); never log or commit it (`Logging/AppLog` scrubs it).
 - `src/ScreenWatcher/UI`: main window + settings page, built from `design/mockup-*.html`.
 - `samples/`: reference images and their classification (`samples/README.md`).

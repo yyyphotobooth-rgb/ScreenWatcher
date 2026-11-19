@@ -39,6 +39,7 @@ public sealed class Watcher : IDisposable
     readonly IReadOnlyList<IHudDetector> _hudDetectors;
     readonly UnreadableDetector _unreadable;
     readonly QuestPanelDetector _quest;
+    readonly InventoryDetector _inventory;
     readonly List<WatchEvent> _hudEvents = [];
     readonly IArmedState[] _armables;
     readonly Dictionary<string, bool> _armed = new(StringComparer.Ordinal), _armedBefore = new(StringComparer.Ordinal);
@@ -74,8 +75,9 @@ public sealed class Watcher : IDisposable
         _frameDetectors = [_death];
         var glyphs = GlyphSet.LoadAll(Path.Combine(AppContext.BaseDirectory, GlyphSet.FileName));
         var items = new ItemDetector(config, IconSet.Load(Path.Combine(AppContext.BaseDirectory, IconSet.FileName)), Readings, Options);
+        _inventory = new InventoryDetector(config, Readings);
         _hudDetectors = [new AmmoDetector(config, glyphs, Readings), new FuelDetector(config, Readings, Options),
-            new KillDetector(config, glyphs, Readings), items];
+            new KillDetector(config, glyphs, Readings), items, _inventory];
         _unreadable = new UnreadableDetector(config, Readings, Options, () => items.BarHiddenPolls, id => _quest!.Covers(id));
         _quest = new QuestPanelDetector(config, Readings, Options, () => _unreadable.LimitSeconds);
         _unreadable.Recovered += r => { try { UnreadableRecovered?.Invoke(r); } catch (Exception) { } };
@@ -104,6 +106,15 @@ public sealed class Watcher : IDisposable
     /// <summary>Raised on the polling thread when a row reported by the "อ่านค่าไม่ได้" alert shows
     /// a value again.</summary>
     public event Action<UnreadableRow>? UnreadableRecovered;
+
+    /// <summary>"ช่องเก็บของเต็ม": un-latch (row button or Discord /reset; any thread, applied on the
+    /// next poll). Returns whether it was latched.</summary>
+    public bool ResetInventoryFull()
+    {
+        bool was = _inventory.Latched;
+        _inventory.RequestReset();
+        return was;
+    }
 
     /// <summary>The threshold a row uses now (user's value or the row's default).</summary>
     public int ThresholdOf(string alertId) => _threshold(alertId);

@@ -150,6 +150,7 @@ public sealed class UnreadableDetector
         if (text == RowReading.Unknown) return Sight.Unreadable;
         if (text == ItemDetector.GoneText) return Sight.NotShown;
         if (RowStats.TryValue(text, out _)) return Sight.Value;
+        if (r.Id == AlertIds.InventoryFull && text != RowReading.None) return Sight.Value;   // ปกติ / เต็ม: the box was read
         if (r.Item && text == RowReading.None)
         {
             int hidden = _barHiddenPolls();
