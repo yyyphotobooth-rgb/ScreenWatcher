@@ -130,7 +130,7 @@ public class ExpTestTests(ITestOutputHelper output)
         g.Poll(88, 5200, polls: 4);                         // stable at end-1 (61 s) and end (62 s)
         var r = Assert.Single(g.Results);
         Assert.Equal(139, r.GainHundredths);
-        Assert.Equal("ทดสอบ EXP จบ · 1 นาที\nได้ +1.39% (Lv.88 50.61% → Lv.88 52.00%)\nเฉลี่ย 1.39% ต่อนาที\nเวลาต่อ 1 เลเวล (Lv.88): ราว 1 ชม. 12 นาที\nเหลืออีกราว 35 นาที จะเลเวลอัพ\nยิงมอน ไม่ทราบ", r.Text);
+        Assert.Equal("ทดสอบ EXP จบ · 1 นาที\nได้ +1.39% (Lv.88 50.61% → Lv.88 52.00%)\nเฉลี่ย 1.39% ต่อนาที\nเวลาต่อ 1 เลเวล (Lv.88) : ราว 1 ชม. 12 นาที\nเหลืออีกราว 35 นาที จะเลเวลอัพ\nยิงมอน ไม่ทราบ", r.Text);
         Assert.True(r.Comparable);
         Assert.Equal(ExpPhase.Idle, g.R.Phase);
     }
@@ -447,7 +447,7 @@ public class ExpTestTests(ITestOutputHelper output)
     public void Result_message_with_kills_has_the_kill_rate_and_a_flag_line()
     {
         var r = Result("k", T0, 10, 5000, 5100, kills: 50, paused: true);
-        Assert.Equal("ทดสอบ EXP จบ · 10 นาที\nได้ +1.00% (Lv.88 50.00% → Lv.88 51.00%)\nเฉลี่ย 0.10% ต่อนาที\nเวลาต่อ 1 เลเวล (Lv.88): ราว 16 ชม. 40 นาที\nเหลืออีกราว 8 ชม. 10 นาที จะเลเวลอัพ\nยิงมอน 50 ตัว · 5.0 ตัวต่อนาที\nหยุดเฝ้าระหว่างทดสอบ · ใช้เทียบไม่ได้", r.Text);
+        Assert.Equal("ทดสอบ EXP จบ · 10 นาที\nได้ +1.00% (Lv.88 50.00% → Lv.88 51.00%)\nเฉลี่ย 0.10% ต่อนาที\nเวลาต่อ 1 เลเวล (Lv.88) : ราว 16 ชม. 40 นาที\nเหลืออีกราว 8 ชม. 10 นาที จะเลเวลอัพ\nยิงมอน 50 ตัว · 5.0 ตัวต่อนาที\nหยุดเฝ้าระหว่างทดสอบ · ใช้เทียบไม่ได้", r.Text);
     }
 
     [Fact]

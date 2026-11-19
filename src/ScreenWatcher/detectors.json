@@ -362,7 +362,7 @@
     // Rows crossing the limit within this many seconds of the first one share one message.
     "combineSeconds": 3,
     // {0} = the short names below, comma separated. Sent with the full client frame.
-    "message": "เรดาร์ถูกบัง อ่านค่าไม่ได้: {0}",
+    "message": "อ่านค่าไม่ได้ : {0}",
     // Watched rows in table order: [alert row id, short name].
     "rows": [
       [ "gunAmmoEmpty", "ปืนกล" ], [ "missileEmpty", "มิสไซล์" ], [ "ammoBox", "กล่องกระสุน" ],

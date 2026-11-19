@@ -140,7 +140,7 @@ public class QuestPanelTests(ITestOutputHelper output)
         rig.Readings.Set(AlertIds.Kill300, RowReading.Unknown);
         rig.Poll(200, 215, panel: true);
         Assert.Equal(2, rig.Events.Count);
-        Assert.Equal("เรดาร์ถูกบัง อ่านค่าไม่ได้: นับมอน", rig.Events[1].Message);
+        Assert.Equal("อ่านค่าไม่ได้ : นับมอน", rig.Events[1].Message);
     }
 
     [Fact]

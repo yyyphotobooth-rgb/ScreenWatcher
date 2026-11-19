@@ -98,7 +98,7 @@ public static class ExpTexts
             if (r.RatePerMin is { } rate)
             {
                 lines.Add($"เฉลี่ย {ExpMath.RateText(rate)}% ต่อนาที");
-                if (r.MinutesPerLevel is { } per) lines.Add($"เวลาต่อ 1 เลเวล (Lv.{e.Level}): ราว {ExpMath.Duration(per)}");
+                if (r.MinutesPerLevel is { } per) lines.Add($"เวลาต่อ 1 เลเวล (Lv.{e.Level}) : ราว {ExpMath.Duration(per)}");
                 if (r.MinutesLeft is { } left) lines.Add($"เหลืออีกราว {ExpMath.Duration(left)} จะเลเวลอัพ");
             }
         }
