@@ -6,11 +6,14 @@ namespace ScreenWatcher.Detection.Hud;
 
 /// <summary>
 /// Reads the level from the line "Lv.88 50.61%" at the bottom centre of the client (on the exp
-/// bar, under the item bar). The game draws it in its own 4x7 pixel font (no Windows font renders
-/// it: measured against Tahoma, Verdana, MS Sans Serif, Small Fonts and others), light grey
-/// (222,222,222) with a black outline, left-aligned: "Lv." then the level digits at a fixed 5 px
-/// pitch, then a space. The line's left end is the "L" (leftmost ink in the area); "Lv." must
-/// match before any digit is read. On a stretched HUD the cells are sampled at the HUD scale.
+/// bar, under the item bar), light grey (222,222,222) with a black outline.
+/// The game draws it character by character in Windows' Tahoma without smoothing (character
+/// height 10 px on 1024x768 .. 1920x1080 clients, 11 px on the owner's 1920x1200 client; a whole
+/// line rendered at once does not match, its letter spacing differs). Primary read: the line is
+/// cut into characters at blank columns, the "L" is found, "v" and "." are skipped and the digits
+/// are looked up pixel-exactly among Tahoma digits rendered at start-up (FontMinHeight..Max).
+/// Fallback (no Tahoma match): the 4x7 cell table of the first version (1.0 layout, cells sampled
+/// at the HUD scale on a stretched HUD).
 /// </summary>
 public sealed class LevelReader
 {
@@ -22,9 +25,16 @@ public sealed class LevelReader
     bool[] _ink = [];
     int _ah;
 
+    readonly CountFont _font;
+    readonly Dictionary<string, int> _lKeys = new();
+    char[] _key = [];
+
     public LevelReader(LevelConfig config)
     {
         _c = config;
+        _font = CountFont.Render(config.FontFace, config.FontMinHeight, config.FontMaxHeight);
+        for (int h = config.FontMinHeight; h <= config.FontMaxHeight; h++)
+            if (CountFont.Glyph(config.FontFace, h, 'L') is { } l) _lKeys.TryAdd(l, h);
         if (config.Prefix.Length != GlyphH) throw new InvalidDataException("level: prefix must have 7 rows");
         _prefixW = config.Prefix[0].Length;
         _prefix = Parse(config.Prefix, _prefixW);
@@ -75,6 +85,94 @@ public sealed class LevelReader
     public int? Read(Frame f, HudScale scale)
     {
         _fail = null;
+        if (ReadTahoma(f, scale) is { } level) return level;
+        return ReadCells(f, scale);
+    }
+
+    /// <summary>Ink mask of the area into _ink; returns its size (0 when empty).</summary>
+    (int W, int H) Mask(Frame f, Rectangle area)
+    {
+        int aw = area.Width, ah = area.Height;
+        if (aw <= 0 || ah <= 0) return (0, 0);
+        if (_ink.Length < aw * ah) _ink = new bool[aw * ah];
+        _ah = ah;
+        var px = f.Pixels;
+        for (int y = 0; y < ah; y++)
+        {
+            int i = ((area.Y + y) * f.Width + area.X) * 4;
+            for (int x = 0; x < aw; x++, i += 4) _ink[y * aw + x] = Ink(px, i);
+        }
+        return (aw, ah);
+    }
+
+    /// <summary>Next run of ink columns from column x (inclusive); false when none is left.</summary>
+    bool NextSegment(int aw, int ah, ref int x, out int x0, out int x1, out int y0, out int y1)
+    {
+        x0 = x1 = y0 = y1 = -1;
+        for (; x < aw; x++)
+        {
+            int top = -1, bottom = -1;
+            for (int y = 0; y < ah; y++) if (_ink[y * aw + x]) { if (top < 0) top = y; bottom = y; }
+            if (top < 0) { if (x0 >= 0) { x1 = x - 1; return true; } continue; }
+            if (x0 < 0) { x0 = x; y0 = top; y1 = bottom; }
+            else { y0 = Math.Min(y0, top); y1 = Math.Max(y1, bottom); }
+        }
+        if (x0 < 0) return false;
+        x1 = aw - 1;
+        return true;
+    }
+
+    /// <summary>The segment's ink as a CountFont key (rows of '#'/'.' joined by '/') in _key.</summary>
+    ReadOnlySpan<char> Key(int aw, int x0, int x1, int y0, int y1)
+    {
+        int w = x1 - x0 + 1, h = y1 - y0 + 1;
+        if (_key.Length < h * (w + 1)) _key = new char[h * (w + 1)];
+        int n = 0;
+        for (int y = y0; y <= y1; y++)
+        {
+            for (int x = x0; x <= x1; x++) _key[n++] = _ink[y * aw + x] ? '#' : '.';
+            if (y < y1) _key[n++] = '/';
+        }
+        return _key.AsSpan(0, n);
+    }
+
+    int? ReadTahoma(Frame f, HudScale scale)
+    {
+        var area = Area(f.Width, f.Height, scale);
+        var (aw, ah) = Mask(f, area);
+        if (aw == 0) return null;
+        var lLookup = _lKeys.GetAlternateLookup<ReadOnlySpan<char>>();
+        var dLookup = _font.Digits.GetAlternateLookup<ReadOnlySpan<char>>();
+        int x = 0;
+        // 1. The "L": its rows are the digits' rows.
+        int top = -1, bottom = -1, prevEnd = -1;
+        while (NextSegment(aw, ah, ref x, out int s0, out int s1, out int t0, out int t1))
+            if (lLookup.ContainsKey(Key(aw, s0, s1, t0, t1))) { top = t0; bottom = t1; prevEnd = s1; break; }
+        if (top < 0) return null;
+        // 2. "v" then ".": a 1-column segment ending on the digits' bottom row, within the next two.
+        bool dot = false;
+        for (int k = 0; k < 2 && !dot; k++)
+        {
+            if (!NextSegment(aw, ah, ref x, out int s0, out int s1, out int t0, out int t1)) return null;
+            dot = s1 == s0 && t1 == bottom && t0 > top;
+            prevEnd = s1;
+        }
+        if (!dot) return null;
+        // 3. Digits: full height, adjacent (at most MaxDigitGap blank columns), up to MaxDigits.
+        int value = 0, digits = 0;
+        while (digits < _c.MaxDigits && NextSegment(aw, ah, ref x, out int s0, out int s1, out int t0, out int t1))
+        {
+            if (digits > 0 && s0 - prevEnd - 1 > _c.MaxDigitGap) break;   // the space before the percentage
+            if (t0 != top || t1 != bottom || !dLookup.TryGetValue(Key(aw, s0, s1, t0, t1), out int d)) return null;   // something else glued to the number
+            value = value * 10 + d;
+            digits++;
+            prevEnd = s1;
+        }
+        return digits == 0 ? null : value;
+    }
+
+    int? ReadCells(Frame f, HudScale scale)
+    {
         var s = HudLayout.Snap(scale);
         var area = Area(f.Width, f.Height, scale);
         if (area.Width <= 0 || area.Height <= 0) return null;

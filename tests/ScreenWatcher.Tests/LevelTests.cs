@@ -62,6 +62,29 @@ public class LevelTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Owner_client_1920x1200_at_hud_scale_1_11_reads_the_level_in_Tahoma_11()
+    {
+        // Live capture 2026-11-19 12:58 (the owner's current window): "Lv.88 86.69%", Tahoma 11 px.
+        var frame = Load(Path.Combine(TestData.SamplesDir, "live-2026-11-19", "full_1920x1200.png"));
+        Assert.Equal(88, Reader.Read(frame, new HudScale(1.1125, 1.115)));
+    }
+
+    [Fact]
+    public void Level_digits_at_1_0_are_Tahoma_10_and_at_1920x1200_Tahoma_11()
+    {
+        static string Cropped(string[] rows)
+        {
+            int x0 = Enumerable.Range(0, rows[0].Length).First(x => rows.Any(r => r[x] == '#'));
+            int x1 = Enumerable.Range(0, rows[0].Length).Last(x => rows.Any(r => r[x] == '#'));
+            return string.Join("/", rows.Select(r => r[x0..(x1 + 1)]));
+        }
+        foreach (var (d, rows) in C.Level.Digits)
+            Assert.Equal(Cropped(rows), CountFont.Glyph("Tahoma", 10, d[0]));
+        foreach (var (d, rows) in C.Items.CountGlyphs)   // the item counts' Tahoma 11 digits = the 1920x1200 level digits
+            Assert.Equal(string.Join("/", rows), CountFont.Glyph("Tahoma", 11, d[0]));
+    }
+
+    [Fact]
     public void No_level_line_no_reading()
     {
         Assert.Null(Reader.Read(TestData.ClientFrame("{1BB4016B-B041-4A52-9FE4-810346C3AC59}.png", 0, 0, 1024, 768), HudScale.One));

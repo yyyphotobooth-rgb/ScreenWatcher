@@ -438,6 +438,13 @@
     "area": [ -130, -14, 260, 12 ],
     "inkMin": 170, "inkMaxSpread": 40,
     "minScore": 0.95, "minScoreScaled": 0.85, "minMargin": 0.05,
+    // Primary read: the game draws the line character by character in Windows' Tahoma, unsmoothed:
+    // 10 px on 1024x768 .. 1920x1080 clients (the 4x7 digits below are exactly Tahoma 10 / 9), 11 px
+    // on 1920x1200 (HUD scale 1.11, live 2026-11-19: all ten digits seen, identical to the item
+    // counts' Tahoma 11). Digits rendered at start-up for these heights; adjacent digits are 1 px
+    // apart, the space before the percentage is wider.
+    "fontFace": "Tahoma", "fontMinHeight": 9, "fontMaxHeight": 18, "maxDigitGap": 2,
+    // Fallback (no Tahoma match): the first version's 4x7 cells.
     "digitStart": 13, "digitPitch": 5, "maxDigits": 3,
     "prefix": [ "#...........", "#...........", "#...#...#...", "#....#.#....", "#....#.#....", "#....#.#...#", "####..#....#" ],
     "digits": {
