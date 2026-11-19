@@ -115,6 +115,37 @@ public sealed class UnreadableTests : IDisposable
     }
 
     [Fact]
+    public void A_row_readable_again_inside_the_combine_window_is_not_sent()
+    {
+        // Field trial 2026-11-19 09:56:44/47: the kill counter crossed, showed a value again on
+        // the next poll, and 3 s later "อ่านค่าไม่ได้: นับมอน" went out anyway (0 s, row "ปกติ").
+        AllReadable();
+        Set(AlertIds.Kill300, "?");
+        Poll(5, 17);                                     // crosses at 16 s, window until 19 s
+        Set(AlertIds.Kill300, "79");
+        Poll(17, 25);
+        Assert.Empty(_events);
+        Assert.Empty(_recovered);                        // nothing was reported, so no recovery either
+        Assert.Equal("ปกติ", _readings.Get(AlertIds.Unreadable).Text);
+
+        // Another row in the same window still goes out, without the recovered one.
+        Set(AlertIds.Kill300, "?");
+        Poll(25, 30);
+        Set(AlertIds.FuelLow, "?");
+        Poll(30, 39);                                    // kill crosses at 36 s (window until 39 s)
+        Assert.Empty(_events);
+        Set(AlertIds.Kill300, "80");                     // kill readable again at 39 s, before its message
+        Poll(39, 45);                                    // fuel ("?" since 30 s) crosses at 41 s, sent at 44 s
+        var e = Assert.Single(_events);
+        Assert.Equal("อ่านค่าไม่ได้: น้ำมัน (อาจมีหน้าต่างบังอยู่)", e.Message);
+
+        // A row that recovers after its message was sent is reported as recovered, as before.
+        Set(AlertIds.FuelLow, "~40%");
+        Poll(45, 46);
+        Assert.Equal(AlertIds.FuelLow, Assert.Single(_recovered).Id);
+    }
+
+    [Fact]
     public void Rows_crossing_within_3_s_share_one_message_and_a_later_row_sends_its_own()
     {
         AllReadable();

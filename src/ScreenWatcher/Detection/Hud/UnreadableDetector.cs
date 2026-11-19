@@ -94,7 +94,15 @@ public sealed class UnreadableDetector
             switch (See(r))
             {
                 case Sight.Value:
-                    if (r.Fired)
+                    if (r.Pending)
+                    {
+                        // Readable again before its message went out: drop it from the message
+                        // (field trial 2026-11-19 09:56:47 sent "นับมอน" 3 s after it recovered).
+                        r.Pending = false;
+                        _pending.Remove(r);
+                        r.Fired = false;
+                    }
+                    else if (r.Fired)
                     {
                         double secs = (now - r.FiredRunStart).TotalSeconds;
                         r.Fired = false;
