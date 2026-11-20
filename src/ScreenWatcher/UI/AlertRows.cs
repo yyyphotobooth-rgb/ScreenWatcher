@@ -37,6 +37,9 @@ public static class AlertRowCatalog
         new(AlertIds.SpPotions, "ยา SP เหลือ", Implemented: true, "ชิ้น", 5, SideChooser: true),
         // Second line: the EXP card left the buff bar ("ตอนนี้": มีบัตร / ไม่มีบัตร).
         new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: true, SubId: AlertIds.ExpCard, SubLabel: "บัตร exp ครบ 30 นาที"),
+        // War pillars: one alert per pillar at N minutes left. "ตอนนี้": every timer left to right
+        // ("00:15 · 00:42"; "00:15 +1" when they do not fit), ไม่มี, or ? (tooltip over a panel).
+        new(AlertIds.WarPillar, "เสาวอ แจ้งเมื่อเหลือ", Implemented: true, "นาที", 10, MaxThreshold: 120, MinThreshold: 1, NowWidth: 118),
         // "ตอนนี้": ปกติ / เต็ม (รอรีเซ็ต) (latched until "รีเซ็ต" or /reset) / ? (message box not seen).
         new(AlertIds.InventoryFull, "ช่องเก็บของเต็ม", Implemented: true, ResetButton: true),
         // "ตอนนี้": Lv.N · P% (Lv.N when the percentage is unreadable), or ? when the level line cannot be read.
@@ -229,9 +232,9 @@ sealed class AlertRow : Control
 
     /// <summary>"ตอนนี้" for a comma-separated list of names: all of them when they fit the column,
     /// else the first one and "+N" for the rest.</summary>
-    public void SetNowList(string text, Color? colour = null)
+    public void SetNowList(string text, Color? colour = null, string separator = ", ")
     {
-        var names = text.Split(", ");
+        var names = text.Split(separator);
         if (names.Length > 1 && TextRenderer.MeasureText(text, _now.Font).Width > _now.Width)
             text = $"{names[0]} +{names.Length - 1}";
         SetNow(text, colour);

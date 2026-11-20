@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel, InventoryConfig Inventory, LevelConfig Level, ExpTestConfig ExpTest, ExpStallConfig ExpStall, ExpCardConfig ExpCard)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel, InventoryConfig Inventory, LevelConfig Level, ExpTestConfig ExpTest, ExpStallConfig ExpStall, ExpCardConfig ExpCard, WarPillarConfig WarPillar)
 {
     public const string FileName = "detectors.json";
 
@@ -260,3 +260,13 @@ public sealed record TextInk(int[] Min, int[] Max, int OutlineMax);
 public sealed record ExpCardConfig(
     string Message, double AbsentSeconds, int NoCardAfterPolls, double EmblemTop, double SearchLeft, int SearchY, int SearchYScaled,
     double MaxDistance, double CropLeft, int CropHeight, string[] Emblem);
+
+/// <summary>War pillar ("เสาวอ") panels (Detection/Hud/WarPillarDetector.cs). Positions are the 1.0
+/// layout relative to the icon box's blue line top-left corner (client y FrameY at 1.0; x is
+/// searched from SearchLeft to the right edge). TimerX/TimerY: inclusive band of the HH:MM text;
+/// Crop: [x, y, width, height] of the alert picture.</summary>
+public sealed record WarPillarConfig(
+    string Message, int DefaultMinutes, double FrameY, int SearchY, double SearchLeft, int[] FrameColor, int FrameTolerance,
+    int FrameWidth, int FrameHeight, double FrameMinShare, int OutlineMinLum, int[] TimerX, int[] TimerY, int InkMin,
+    string FontFace, int FontMinHeight, int FontMaxHeight, int[] Crop, int StablePolls, int ForgetAfterMinutes,
+    int[] CoverText, int CoverTextMin, int CoverOutlineMax);

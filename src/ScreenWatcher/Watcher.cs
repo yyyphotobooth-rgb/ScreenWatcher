@@ -86,7 +86,7 @@ public sealed class Watcher : IDisposable
         _stall = new ExpStallDetector(config, Readings, Options, () => _level.LastLine);
         // _stall after _level: it uses the line the level row read on this poll.
         _hudDetectors = [new AmmoDetector(config, glyphs, Readings), new FuelDetector(config, Readings, Options),
-            _kill, new ExpCardDetector(config, Readings), items, _inventory, _level, _stall];
+            _kill, new ExpCardDetector(config, Readings), new WarPillarDetector(config, Readings, Options), items, _inventory, _level, _stall];
         ExpTest = new ExpTestRunner(config, _level.Reader);
         _unreadable = new UnreadableDetector(config, Readings, Options, () => items.BarHiddenPolls, id => _quest!.Covers(id));
         _quest = new QuestPanelDetector(config, Readings, Options, () => _unreadable.LimitSeconds,
@@ -98,6 +98,7 @@ public sealed class Watcher : IDisposable
         _defaultThresholds[AlertIds.FuelLow] = config.Fuel.DefaultThresholdPercent;
         _defaultThresholds[AlertIds.Unreadable] = config.Unreadable.DefaultSeconds;
         _defaultThresholds[AlertIds.ExpStall] = config.ExpStall.DefaultMinutes;
+        _defaultThresholds[AlertIds.WarPillar] = config.WarPillar.DefaultMinutes;
         foreach (var item in config.Items.Items) _defaultThresholds[item.Id] = item.DefaultThreshold;
         _readingText = id => Readings.Get(id).Text;
         _threshold = id => Options.Threshold(id, _defaultThresholds.GetValueOrDefault(id));

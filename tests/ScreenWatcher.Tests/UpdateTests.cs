@@ -81,7 +81,7 @@ public class UpdateTests
         Assert.Equal(newer, UpdateVersion.IsNewer(Version.Parse(candidate), Version.Parse(current)));
 
     [Fact]
-    public void App_version_is_1_1_2() => Assert.Equal(new Version(1, 1, 2), UpdateVersion.Current);
+    public void App_version_is_1_2_0() => Assert.Equal(new Version(1, 2, 0), UpdateVersion.Current);
 
     static string Release(string tag, bool withSig = true, string scheme = "https", bool prerelease = false) => $$"""
         {

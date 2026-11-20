@@ -74,11 +74,13 @@ public sealed class RowStats
     }
 
     /// <summary>The number a row's "ตอนนี้" text stands for: "123", "~25%", "&gt;90%", "หมด" (0), "Lv.88" / "Lv.88 · 50.61%" (88).
+    /// War pillar timers "00:15 · 00:42": the smallest remaining time in minutes (15).
     /// False for "—", "?" and anything else.</summary>
     public static bool TryValue(string text, out int value)
     {
         value = 0;
         if (text == Detection.Hud.ItemDetector.GoneText) return true;
+        if (text.Contains(':')) return Detection.Hud.WarPillarDetector.TryParseRow(text, out value);
         var s = text.AsSpan();
         if (s.StartsWith("Lv."))
         {

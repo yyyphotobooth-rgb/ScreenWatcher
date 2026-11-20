@@ -37,6 +37,10 @@ Discord bot (Discord.Net, runs inside the app).
   (tooltip, window, cursor) is unreadable and keeps the last value. Kill counter: the panel exists
   only while an EXP card is in use; done = last value >= 295 then no panel for 10 s; row shows
   "ครบแล้ว" / "ไม่มี"; only tooltip text over it makes it unreadable.
+  War pillar (`WarPillar.cs`, detectors.json `warPillar`): icon boxes (blue line + light outline)
+  searched along the strip under the gauge; HH:MM read pixel-exactly as Tahoma (11 px at 1.0);
+  pillars tracked by remaining time (never slot); one alert per pillar at <= N minutes (row
+  "เสาวอ แจ้งเมื่อเหลือ N นาที", 1..120, default 10); no panel = "ไม่มี", "?" only under tooltip text.
 - `src/ScreenWatcher/Collection`: optional "Collect data" mode (HUD crops + full frames saved to
   %LOCALAPPDATA%\ScreenWatcher\collect, size-capped; writes on a background thread).
 - `src/ScreenWatcher/Diagnostics`: field-trial diagnostics, all under %LOCALAPPDATA%\ScreenWatcher:

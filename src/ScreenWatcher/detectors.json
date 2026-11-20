@@ -319,6 +319,42 @@
     ]
   },
 
+  "warPillar": {
+    // War pillar ("เสาวอ") panels (Detection/Hud/WarPillar*.cs): a label box "สงครามจุดยุทธศาสตร์ /
+    // กำลังดำเนินอยู่" and a 46x42 icon box with the countdown HH:MM to the pillar's end, under the
+    // top-left gauge. Panels exist only during a war; extra ones appear to the right, and the rest
+    // shift left when one ends, so the whole strip is searched and pillars are tracked by their
+    // remaining time, never by slot. Measured on samples/from-chat/warpillar_full_0014_1407.png
+    // (client at (1,1), HUD 1.0) and warpillar_full_0015_1406.png (client at (0,0)): icon box
+    // = 1-px light outline (241,247,255; fades to ~144 lower down on the left) with a 1-px blue line
+    // (39,95,151) inside it; the blue line's top-left corner is client (254,48) at 1.0 (frameY).
+    // Timer: Windows' Tahoma, no smoothing, character height 11 at 1.0 (pixel-identical to the
+    // rendered font for 0,1,2,4,5,7 and ':'), pure white with a black outline, digit rows
+    // 28..35 below the blue line's top.
+    "message": "เสาวอเหลือ {0} นาที!",
+    "defaultMinutes": 10,
+    "frameY": 48, "searchY": 3, "searchLeft": 120,
+    "frameColor": [ 39, 95, 151 ], "frameTolerance": 60,
+    // Blue line (and outline) samples, 1.0 layout from the corner: left column rows 2..frameHeight, top row
+    // columns 2..frameWidth. Share of samples that must match.
+    "frameWidth": 40, "frameHeight": 38, "frameMinShare": 0.85,
+    // The light outline outside the blue line (luminance; 241 at the top, ~170 at row 38 on the
+    // left). Blue sky (43,83,126) passes the colour test alone: the outline keeps it out.
+    "outlineMinLum": 120,
+    // Timer band (1.0 layout from the corner, inclusive; outline rows included) and ink.
+    "timerX": [ 4, 42 ], "timerY": [ 27, 36 ], "inkMin": 200,
+    "fontFace": "Tahoma", "fontMinHeight": 9, "fontMaxHeight": 26,
+    // Alert picture: label box + icon box + bars (1.0 layout from the corner).
+    "crop": [ -80, -4, 128, 56 ],
+    // A pillar must be read on this many polls (continuing its countdown) before it can alert.
+    "stablePolls": 2,
+    // A pillar not seen is kept until its countdown would be this many minutes past zero (a panel
+    // hidden by a window and shown again is the same pillar: no second alert).
+    "forgetAfterMinutes": 2,
+    // Tooltip text over an icon box (same colours as the kill counter's rule): the row shows "?".
+    "coverText": [ 215, 229 ], "coverTextMin": 6, "coverOutlineMax": 25
+  },
+
   "items": {
     // Bottom-centre bar: ten 30x30 slot frames at exactly 31 px pitch, first frame at x c-161,
     // frames y H-47..H-18 (1024x768, 1440x1080, 1600x1024 and 1920x1080 clients: same offsets).
@@ -414,7 +450,7 @@
       [ "gunAmmoEmpty", "ปืนกล" ], [ "missileEmpty", "มิสไซล์" ], [ "ammoBox", "กล่องกระสุน" ],
       [ "fuelLow", "น้ำมัน" ], [ "fuelBottles", "ขวดน้ำมัน" ], [ "monsterCard", "บัตรกันมอน" ],
       [ "hpPotions", "ยาเลือด" ], [ "shieldPotions", "ยาเกราะ" ], [ "spPotions", "ยา SP" ],
-      [ "kill300", "นับมอน" ], [ "inventoryFull", "กล่องข้อความระบบ" ], [ "levelUp", "เลเวล" ]
+      [ "kill300", "นับมอน" ], [ "warPillar", "เสาวอ" ], [ "inventoryFull", "กล่องข้อความระบบ" ], [ "levelUp", "เลเวล" ]
     ]
   },
 

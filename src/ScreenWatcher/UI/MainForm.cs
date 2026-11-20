@@ -715,6 +715,7 @@ public sealed class MainForm : Form
                     r.SetChooserVisible(now.TwoFound);
                     if (r.Spec.Id == AlertIds.Unreadable) r.SetNowList(now.Text, now.Text is "ปกติ" or "—" ? null : Theme.WarnValue);
                     else if (r.Spec.Id == AlertIds.InventoryFull) r.SetNow(now.Text, now.Reached ? Theme.WarnValue : null);
+                    else if (r.Spec.Id == AlertIds.WarPillar) r.SetNowList(now.Text, separator: " · ");
                     else r.SetNow(now.Text);
                     string? subText = r.Spec.SubId is { } subId ? _watcher.Readings.Get(subId).Text : null;
                     if (subText is not null) r.SetSubNow(subText);

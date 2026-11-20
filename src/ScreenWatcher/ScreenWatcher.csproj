@@ -6,7 +6,7 @@
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <!-- App version: the only place it is set. Window title shows Major.Minor ("ScreenWatcher 1.0");
          the journal/log build id uses the full informational version. -->
-    <Version>1.1.2</Version>
+    <Version>1.2.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
