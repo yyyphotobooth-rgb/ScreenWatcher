@@ -12,7 +12,7 @@ dotnet publish (Join-Path $root 'src\ScreenWatcher\ScreenWatcher.csproj') `
     -c Release -r win-x64 --self-contained true `
     -p:PublishSingleFile=true `
     -p:IncludeNativeLibrariesForSelfExtract=true `
-    -p:EnableCompressionInSingleFile=true `
+    -p:EnableCompressionInSingleFile=false `
     -p:PublishTrimmed=false `
     -p:DebugType=none -p:DebugSymbols=false `
     -p:ContinuousIntegrationBuild=true `
