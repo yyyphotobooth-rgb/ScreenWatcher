@@ -81,7 +81,13 @@ public sealed class DiagnosticsHub : IDisposable
             string version = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "?";
             string mvid = asm.ManifestModule.ModuleVersionId.ToString("N")[..12];
             string stamp = "?";
-            try { stamp = File.GetLastWriteTime(Path.Combine(AppContext.BaseDirectory, "ScreenWatcher.dll")).ToString("yyyyMMdd-HHmmss", Inv); }
+            try
+            {
+                // Normal build: the dll; single-file publish: there is no dll on disk, so the exe.
+                string dll = Path.Combine(AppContext.BaseDirectory, "ScreenWatcher.dll");
+                string? file = File.Exists(dll) ? dll : Environment.ProcessPath;
+                if (file is not null && File.Exists(file)) stamp = File.GetLastWriteTime(file).ToString("yyyyMMdd-HHmmss", Inv);
+            }
             catch (Exception) { }
             return $"{version}+{mvid}@{stamp}";
         }

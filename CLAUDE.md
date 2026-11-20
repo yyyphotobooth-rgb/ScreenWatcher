@@ -52,3 +52,9 @@ Discord bot (Discord.Net, runs inside the app).
 - Run: `dotnet run --project src/ScreenWatcher -c Release`
 - Check the readers live without Discord: add `-- --no-send` (never connects or sends; alerts and
   row readings go to `%LOCALAPPDATA%\ScreenWatcher\log.txt`).
+- One-file build for friends: `powershell -ExecutionPolicy Bypass -File .\publish.ps1` ->
+  `dist\ScreenWatcher.exe` (self-contained win-x64 single file, no trimming, compressed; dist\ is
+  git-ignored and wiped first). Version: `<Version>` in `ScreenWatcher.csproj` (title shows
+  Major.Minor). detectors.json, glyphs.json, icons.json and the guide are embedded resources
+  (`AppFiles.cs`; a file next to the exe wins). Try a fresh install without touching real data:
+  set `SCREENWATCHER_DATA` to an empty folder (replaces %LOCALAPPDATA%\ScreenWatcher).

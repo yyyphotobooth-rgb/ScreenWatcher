@@ -77,8 +77,8 @@ public sealed class Watcher : IDisposable
         _death = new DeathDetector(config.Death);
         _scale = new HudScaleTracker(config.HudScale);
         _frameDetectors = [_death];
-        var glyphs = GlyphSet.LoadAll(Path.Combine(AppContext.BaseDirectory, GlyphSet.FileName));
-        var items = new ItemDetector(config, IconSet.Load(Path.Combine(AppContext.BaseDirectory, IconSet.FileName)), Readings, Options);
+        var glyphs = GlyphSet.ParseAll(AppFiles.ReadText(GlyphSet.FileName));
+        var items = new ItemDetector(config, IconSet.Parse(AppFiles.ReadText(IconSet.FileName)), Readings, Options);
         _inventory = new InventoryDetector(config, Readings);
         _level = new LevelDetector(config, Readings, Options);
         _level.Ignored += (from, to, why) => { try { LevelIgnored?.Invoke(from, to, why); } catch (Exception) { } };

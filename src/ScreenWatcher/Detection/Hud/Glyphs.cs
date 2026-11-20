@@ -43,11 +43,13 @@ public sealed class GlyphSet
 
     sealed record FontJson(int Width, int Height, Dictionary<string, string[]> Glyphs);
 
-    public static IReadOnlyDictionary<string, GlyphSet> LoadAll(string path)
+    public static IReadOnlyDictionary<string, GlyphSet> LoadAll(string path) => ParseAll(File.ReadAllText(path), path);
+
+    public static IReadOnlyDictionary<string, GlyphSet> ParseAll(string json, string source = FileName)
     {
         var opt = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
-        var fonts = JsonSerializer.Deserialize<Dictionary<string, FontJson>>(File.ReadAllText(path), opt)
-            ?? throw new InvalidDataException($"Empty glyph file: {path}");
+        var fonts = JsonSerializer.Deserialize<Dictionary<string, FontJson>>(json, opt)
+            ?? throw new InvalidDataException($"Empty glyph file: {source}");
         return fonts.ToDictionary(f => f.Key, f => new GlyphSet(f.Value.Width, f.Value.Height, f.Value.Glyphs), StringComparer.OrdinalIgnoreCase);
     }
 }

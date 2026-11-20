@@ -15,9 +15,11 @@ public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, Drop
         RespectRequiredConstructorParameters = true,
     };
 
-    public static WatcherConfig Load(string path) =>
-        JsonSerializer.Deserialize<WatcherConfig>(File.ReadAllText(path), Options)
-        ?? throw new InvalidDataException($"Empty config: {path}");
+    public static WatcherConfig Load(string path) => Parse(File.ReadAllText(path), path);
+
+    public static WatcherConfig Parse(string json, string source = FileName) =>
+        JsonSerializer.Deserialize<WatcherConfig>(json, Options)
+        ?? throw new InvalidDataException($"Empty config: {source}");
 }
 
 public sealed record WindowConfig(string TitlePrefix, string[] ExcludeTitles);

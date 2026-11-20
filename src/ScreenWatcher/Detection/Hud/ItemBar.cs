@@ -32,8 +32,10 @@ public sealed class IconSet
         Icons = d;
     }
 
-    public static IconSet Load(string path) =>
-        new(JsonSerializer.Deserialize<Dictionary<string, string[]>>(File.ReadAllText(path)) ?? throw new InvalidDataException($"Empty icon file: {path}"));
+    public static IconSet Load(string path) => Parse(File.ReadAllText(path), path);
+
+    public static IconSet Parse(string json, string source = FileName) =>
+        new(JsonSerializer.Deserialize<Dictionary<string, string[]>>(json) ?? throw new InvalidDataException($"Empty icon file: {source}"));
 }
 
 /// <summary>One watched icon found on the bar. Count is null when the digits could not be read.</summary>

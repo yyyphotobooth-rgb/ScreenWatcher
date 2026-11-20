@@ -51,8 +51,11 @@ public sealed class AppSettings
 
     static readonly JsonSerializerOptions Options = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
 
+    /// <summary>%LOCALAPPDATA%\ScreenWatcher, or the folder named by the SCREENWATCHER_DATA
+    /// environment variable when it is set (to try a fresh install against an empty folder).</summary>
     public static string DataRoot { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScreenWatcher");
+        Environment.GetEnvironmentVariable("SCREENWATCHER_DATA") is { Length: > 0 } dir ? Path.GetFullPath(dir)
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScreenWatcher");
 
     public static string DefaultPath => Path.Combine(DataRoot, "settings.json");
     public static string CollectRoot => Path.Combine(DataRoot, "collect");

@@ -89,7 +89,7 @@ public sealed class MainForm : Form
         _settings = AppSettings.Load(AppSettings.DefaultPath);
 
         AutoScaleMode = AutoScaleMode.None; // layout below is scaled by DeviceDpi by hand
-        Text = noSend ? "ScreenWatcher (ไม่ส่ง Discord)" : "ScreenWatcher";
+        Text = noSend ? AppFiles.Title + " (ไม่ส่ง Discord)" : AppFiles.Title;
         BackColor = Theme.Background;
         ForeColor = Theme.Text;
         Font = Theme.Body;
@@ -814,8 +814,8 @@ public sealed class MainForm : Form
 
     void OpenGuide()
     {
-        string path = Path.Combine(AppContext.BaseDirectory, "docs", "discord-bot-guide.html");
-        if (!File.Exists(path)) { _botStatus.Text = "ไม่พบไฟล์คู่มือ"; return; }
+        string? path = AppFiles.GuidePath(_log);
+        if (path is null) { _botStatus.Text = "ไม่พบไฟล์คู่มือ"; return; }
         OpenUrl(path);
     }
 
