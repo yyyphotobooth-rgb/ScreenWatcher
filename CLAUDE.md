@@ -58,3 +58,10 @@ Discord bot (Discord.Net, runs inside the app).
   Major.Minor). detectors.json, glyphs.json, icons.json and the guide are embedded resources
   (`AppFiles.cs`; a file next to the exe wins). Try a fresh install without touching real data:
   set `SCREENWATCHER_DATA` to an empty folder (replaces %LOCALAPPDATA%\ScreenWatcher).
+
+## GitHub upload rule
+- After every finished and committed change, ASK: "Upload to GitHub now? (yes / no / release)". Never push without that answer in the same chat.
+- yes = `git push origin main` (code backup only).
+- release = only if the owner typed "release": create GitHub release vX.Y.Z from the csproj version with the signed dist exe; requires a prior test by the owner.
+- Never push tokens, signing keys, samples/, dist/, bin/, obj/. Never force-push, delete branches, or delete releases.
+- Before any push, list files changed since origin/main and stop if one is over 50 MB or matches the exclusions.
