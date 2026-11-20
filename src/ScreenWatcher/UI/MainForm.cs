@@ -119,6 +119,13 @@ public sealed class MainForm : Form
             SaveEvidence = _settings.SaveAlertEvidence,
         };
         _diag.Evidence.Start();
+        ScreenWatcher.Update.UpdateInstaller.CleanupTask?.ContinueWith(t =>
+        {
+            if (t.Status != TaskStatus.RanToCompletion) return;
+            var r = t.Result;
+            _diag.Journal.Write("update_cleanup", ("deleted", r.Deleted), ("attempts", r.Attempts), ("ms", (long)r.Elapsed.TotalMilliseconds), ("error", r.Error));
+            _log.Write(r.Deleted ? "Old exe (.old) deleted" : $"Old exe (.old) NOT deleted: {r.Error}");
+        }, TaskScheduler.Default);
         // EXP test: messages go through the alert queue (so --no-send only logs them).
         _exp = new ExpTestService(_watcher.ExpTest, new ExpTestStore(AppSettings.ExpTestRoot), m => _alerts!.Enqueue(m), _diag.Journal, config.ExpTest.ListCount);
         _exp.ResultReady += (r, file) => _log.Write($"EXP test result: {r.Text}" + (file is null ? " (not saved)" : $" -> {file}"));

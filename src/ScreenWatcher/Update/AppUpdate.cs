@@ -10,7 +10,7 @@ public sealed record UpdateInfo(Version Version, string Tag, Uri ExeUrl, Uri Sig
 {
     /// <summary>"1.2" (Major.Minor, like the window title; "1.2.3" when only the patch differs).</summary>
     public string Display(Version current) =>
-        Version.Major == current.Major && Version.Minor == current.Minor ? Version.ToString(3) : $"{Version.Major}.{Version.Minor}";
+        AppFiles.ShortVersion(Version);
 }
 
 /// <summary>Release versions: tags like "v1.1.0" or "1.1"; compared as Major.Minor.Build.</summary>
@@ -127,6 +127,8 @@ public static class UpdateChecker
 }
 
 /// <summary>Why an update click did not finish (Thai text for the banner).</summary>
+public sealed record OldCleanupResult(bool Deleted, int Attempts, TimeSpan Elapsed, string? Error);
+
 public sealed class UpdateFailedException(string thai, Exception? inner = null) : Exception(thai, inner);
 
 /// <summary>
@@ -239,21 +241,76 @@ public static class UpdateInstaller
     public static string[] OnStartup(string[] args)
     {
         int i = Array.FindIndex(args, a => string.Equals(a, AfterUpdateArg, StringComparison.OrdinalIgnoreCase));
+        int? pid = null;
         if (i >= 0)
         {
-            if (i + 1 < args.Length && int.TryParse(args[i + 1], out int pid))
-            {
-                try { using var p = Process.GetProcessById(pid); p.WaitForExit(15000); }
-                catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { }
-            }
+            if (i + 1 < args.Length && int.TryParse(args[i + 1], out int p)) pid = p;
             args = [.. args.Take(i), .. args.Skip(i + 2)];
         }
         if (CanSelfUpdate)
         {
-            try { File.Delete(Environment.ProcessPath! + OldSuffix); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            // In the background: never blocks the UI. The outcome goes to the journal (see MainForm).
+            string old = Environment.ProcessPath! + OldSuffix;
+            CleanupTask = File.Exists(old)
+                ? Task.Run(() => CleanOldExe(old, pid, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(250)))
+                : null;
             TryDeleteDir(TempRoot);
         }
         return args;
+    }
+
+    /// <summary>Outcome of the background .old deletion started by <see cref="OnStartup"/> (null: no .old).</summary>
+    public static Task<OldCleanupResult>? CleanupTask { get; private set; }
+
+    /// <summary>Waits for the previous process to exit (by <paramref name="pid"/>, else any other process with this
+    /// exe's name), then deletes <paramref name="oldExe"/>, retrying for up to <paramref name="deleteWindow"/>.
+    /// Never throws.</summary>
+    public static OldCleanupResult CleanOldExe(string oldExe, int? pid, TimeSpan exitWait, TimeSpan deleteWindow, TimeSpan retryEvery)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            if (pid is int id)
+            {
+                try { using var p = Process.GetProcessById(id); p.WaitForExit((int)exitWait.TotalMilliseconds); }
+                catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { }
+            }
+            else
+            {
+                string name = Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? UpdateChecker.ExeName);
+                int self = Environment.ProcessId;
+                foreach (var p in Process.GetProcessesByName(name))
+                {
+                    using (p)
+                    {
+                        if (p.Id == self) continue;
+                        try { p.WaitForExit(Math.Max(0, (int)(exitWait - sw.Elapsed).TotalMilliseconds)); }
+                        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+                    }
+                }
+            }
+        }
+        catch (Exception) { }
+
+        int attempts = 0;
+        Exception? last = null;
+        var deleteStart = Stopwatch.StartNew();
+        while (true)
+        {
+            attempts++;
+            try
+            {
+                if (File.Exists(oldExe)) File.Delete(oldExe);
+                return new OldCleanupResult(true, attempts, sw.Elapsed, null);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                last = ex;
+            }
+            if (deleteStart.Elapsed >= deleteWindow) break;
+            Thread.Sleep(retryEvery);
+        }
+        return new OldCleanupResult(false, attempts, sw.Elapsed, last?.GetType().Name + ": " + last?.Message);
     }
 
     static void TryDeleteDir(string dir)

@@ -81,7 +81,7 @@ public class UpdateTests
         Assert.Equal(newer, UpdateVersion.IsNewer(Version.Parse(candidate), Version.Parse(current)));
 
     [Fact]
-    public void App_version_is_1_1_0() => Assert.Equal(new Version(1, 1, 0), UpdateVersion.Current);
+    public void App_version_is_1_1_2() => Assert.Equal(new Version(1, 1, 2), UpdateVersion.Current);
 
     static string Release(string tag, bool withSig = true, string scheme = "https", bool prerelease = false) => $$"""
         {
@@ -154,6 +154,50 @@ public class UpdateTests
             Assert.Equal("v1", File.ReadAllText(target));
         }
         finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("1.1.0", "1.1")]
+    [InlineData("1.1.1", "1.1.1")]
+    [InlineData("1.1.2", "1.1.2")]
+    [InlineData("2.0.0", "2.0")]
+    public void Short_version_shows_patch_only_when_nonzero(string v, string expected) =>
+        Assert.Equal(expected, AppFiles.ShortVersion(Version.Parse(v)));
+
+    [Fact]
+    public void Old_exe_is_deleted_after_a_lock_is_released()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "sw-old-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string old = Path.Combine(dir, "ScreenWatcher.exe.old");
+            File.WriteAllText(old, "old");
+            var lockStream = new FileStream(old, FileMode.Open, FileAccess.Read, FileShare.None);
+            var release = Task.Run(() => { Thread.Sleep(2000); lockStream.Dispose(); });
+            var r = UpdateInstaller.CleanOldExe(old, 999999, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(100));
+            release.Wait();
+            Assert.True(r.Deleted, r.Error);
+            Assert.True(r.Attempts > 1);
+            Assert.False(File.Exists(old));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void Old_exe_still_locked_reports_failure_without_throwing()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "sw-old-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string old = Path.Combine(dir, "ScreenWatcher.exe.old");
+        File.WriteAllText(old, "old");
+        using (new FileStream(old, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var r = UpdateInstaller.CleanOldExe(old, 999999, TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(100));
+            Assert.False(r.Deleted);
+            Assert.NotNull(r.Error);
+        }
+        Directory.Delete(dir, recursive: true);
     }
 
     [Fact]

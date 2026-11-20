@@ -14,15 +14,18 @@ public static class AppFiles
 {
     public const string GuideName = "discord-bot-guide.html";
 
-    /// <summary>"ScreenWatcher 1.0": the window title, from the project's &lt;Version&gt;.</summary>
+    /// <summary>"ScreenWatcher 1.1" / "ScreenWatcher 1.1.1": the window title, from the project's &lt;Version&gt;.</summary>
     public static string Title
     {
         get
         {
             var v = typeof(AppFiles).Assembly.GetName().Version;
-            return v is null ? "ScreenWatcher" : $"ScreenWatcher {v.Major}.{v.Minor}";
+            return v is null ? "ScreenWatcher" : $"ScreenWatcher {ShortVersion(v)}";
         }
     }
+
+    /// <summary>Major.Minor, plus .Patch only when Patch &gt; 0 (1.1.0 → "1.1", 1.1.1 → "1.1.1").</summary>
+    public static string ShortVersion(Version v) => v.Build > 0 ? $"{v.Major}.{v.Minor}.{v.Build}" : $"{v.Major}.{v.Minor}";
 
     public static string ReadText(string fileName)
     {
