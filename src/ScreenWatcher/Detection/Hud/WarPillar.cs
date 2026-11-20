@@ -6,8 +6,9 @@ namespace ScreenWatcher.Detection.Hud;
 
 /// <summary>One war pillar panel found on a frame, left to right. <c>Minutes</c> = remaining time
 /// (HH*60+MM), -1 when the timer could not be read; <c>Covered</c>: unreadable and the game's
-/// tooltip text lies over the icon box.</summary>
-public readonly record struct PillarPanel(Rectangle Box, Rectangle Crop, int Minutes, bool Covered)
+/// tooltip text lies over the icon box. <c>Hp</c> = the HP bar's fill in % (0..100), -1 when the bar
+/// could not be measured; <c>HpCovered</c>: tooltip text lies over the bar.</summary>
+public readonly record struct PillarPanel(Rectangle Box, Rectangle Crop, int Minutes, bool Covered, int Hp = -1, bool HpCovered = false)
 {
     public bool Readable => Minutes >= 0;
 }
@@ -133,7 +134,89 @@ public sealed class WarPillarFinder
             (int)Math.Round(_c.Crop[2] * s.X), (int)Math.Round(_c.Crop[3] * s.Y)));
         int minutes = ReadTimer(f, x, y, s);
         bool covered = minutes < 0 && TooltipTextPixels(f, box) >= _c.CoverTextMin;
-        return new PillarPanel(box, crop, minutes, covered);
+        var (hp, hpCovered) = ReadHp(f, x, y, s);
+        return new PillarPanel(box, crop, minutes, covered, hp, hpCovered);
+    }
+
+    /// <summary>
+    /// HP bar of the box at (x, y): the track's ends from its dark top border row (searched over
+    /// BarSearchX; one row up/down when scaled), checked by the light row under the bar; the fill =
+    /// columns from the left end whose middle rows are mostly fill colour (red, orange or yellow).
+    /// Fill must be one run from the left (at most one stray column inside it); fill beyond a gap
+    /// means something is drawn over the bar: unreadable, never a drop. Tooltip text over the bar
+    /// area: covered.
+    /// </summary>
+    (int Hp, bool Covered) ReadHp(Frame f, int bx, int by, HudScale s)
+    {
+        int sx0 = bx + (int)Math.Round(_c.BarSearchX[0] * s.X), sx1 = bx + (int)Math.Round(_c.BarSearchX[1] * s.X);
+        int yNom = by + (int)Math.Round(_c.BarBorderY * s.Y);
+        int barH = Math.Max(1, (int)Math.Round(_c.BarHeight * s.Y));
+        double expect = _c.BarLength * s.X, tol = Math.Max(_c.BarLengthTolerance, _c.BarLengthTolerance * s.X);
+        var area = Rectangle.Intersect(new Rectangle(0, 0, f.Width, f.Height),
+            new Rectangle(sx0, yNom - 1, sx1 - sx0 + 1, barH + 3));
+        bool textOver = TooltipTextPixels(f, area) >= _c.CoverTextMin;
+        if (textOver) return (-1, true);
+        if (sx0 < 0 || sx1 >= f.Width || yNom - 1 < 0 || yNom + barH + 2 >= f.Height) return (-1, false);
+
+        var px = f.Pixels;
+        int dyMax = s.Y == 1 ? 0 : 1;
+        for (int dy = 0; dy <= dyMax * 2; dy++)
+        {
+            int ty = yNom + (dy == 0 ? 0 : dy == 1 ? -1 : 1);
+            // Longest dark run on the border row.
+            int bestA = -1, bestB = -1;
+            for (int x = sx0; x <= sx1;)
+            {
+                if (!Border(px, f, x, ty)) { x++; continue; }
+                int a = x;
+                while (x <= sx1 && Border(px, f, x, ty)) x++;
+                if (x - a > bestB - bestA + 1) (bestA, bestB) = (a, x - 1);
+            }
+            if (bestA < 0) continue;
+            // Fill columns: between the dark left column and the light right column (the dark top
+            // row runs over both).
+            int left = bestA + 1, right = bestB - 1, len = right - left + 1;
+            if (Math.Abs(len - expect) > tol) continue;
+            // The light row just under the bar.
+            int lightRow = ty + barH + 1, light = 0;
+            for (int x = left; x <= right; x++) if (LightBlue(px, f, x, lightRow)) light++;
+            if (light < _c.FrameMinShare * len) continue;
+
+            // Middle rows of the bar (the top and bottom rows are a highlight and a shadow).
+            int r0 = ty + 1 + barH / 4, r1 = ty + barH - barH / 4;
+            int last = -1, fills = 0;
+            for (int x = left; x <= right; x++)
+            {
+                int n = 0, rows = 0;
+                for (int y = r0; y <= r1; y++, rows++) if (Fill(px, f, x, y)) n++;
+                if (n * 2 > rows) { fills++; last = x; }
+            }
+            int run = last < 0 ? 0 : last - left + 1;
+            if (run - fills > 1) return (-1, false);   // gaps inside the fill: something over the bar
+            return ((int)Math.Round(100.0 * run / len), false);
+        }
+        return (-1, false);
+    }
+
+    bool Border(ReadOnlySpan<byte> px, Frame f, int x, int y)
+    {
+        int i = (y * f.Width + x) * 4;
+        int b = px[i], g = px[i + 1], r = px[i + 2];
+        return (r * 3 + g * 6 + b) / 10 <= _c.BarBorderMaxLum && b - r >= _c.BarBorderMinBlue;
+    }
+
+    bool LightBlue(ReadOnlySpan<byte> px, Frame f, int x, int y)
+    {
+        int i = (y * f.Width + x) * 4;
+        int b = px[i], g = px[i + 1], r = px[i + 2];
+        return (r * 3 + g * 6 + b) / 10 >= _c.BarLightMinLum && b > r;
+    }
+
+    bool Fill(ReadOnlySpan<byte> px, Frame f, int x, int y)
+    {
+        int i = (y * f.Width + x) * 4;
+        int b = px[i], g = px[i + 1], r = px[i + 2];
+        return r >= _c.FillMinRed && r - b >= _c.FillMinRedOverBlue && g - r <= _c.FillMaxGreenOverRed;
     }
 
     /// <summary>Remaining minutes of the timer in the box at (x, y), or -1.</summary>
@@ -250,52 +333,82 @@ public sealed class WarPillarFinder
 /// below it). Pillars not seen (hidden panel, ended) are kept until their countdown would be
 /// ForgetAfterMinutes past zero, so a panel that comes back is the same pillar and never alerts
 /// twice. An unconfirmed new pillar not seen again within 3 s is dropped (a misread).
+/// HP is part of a pillar's state: it never rises (a higher reading is ignored); a lower one is
+/// taken only when read on two consecutive polls of that pillar (the higher of the two), so one
+/// misread never counts. Each HP level (HpLevels, e.g. 75/50/25) alerts once per pillar when the
+/// pillar's HP is below it; several levels at once give one alert, for the lowest. A pillar first
+/// seen already below a level alerts once on confirmation, like the time alert. In matching, HP
+/// only breaks ties of remaining time (a reading above a pillar's HP is the worse match).
 /// </summary>
-public sealed class WarPillarTracker(int stablePolls, int forgetAfterMinutes)
+public sealed class WarPillarTracker(int stablePolls, int forgetAfterMinutes, int[]? hpLevels = null, int hpRiseTolerance = 3)
 {
+    /// <summary>One timer read this poll; <c>Hp</c> -1 when its bar was unreadable.</summary>
+    public readonly record struct Reading(int Minutes, int Hp = -1);
+
+    /// <summary>An alert: <c>HpLevel</c> 0 = time alert, else the HP level crossed.</summary>
+    public readonly record struct Alert(int Slot, int Minutes, int HpLevel = 0);
+
+    const int NoLevel = int.MaxValue;
+    readonly int[] _levels = hpLevels ?? [];
+
     sealed class Pillar
     {
         public int Minutes, Reads;
         public DateTime ReadAt;
         public bool Alerted;
         public int Taken;   // poll stamp: matched on this poll
+        public int Hp = -1, PendingHp = -1, HpLevelAlerted = NoLevel;
     }
 
     readonly List<Pillar> _pillars = [];
-    readonly List<(int Obs, Pillar P, int Gap)> _pairs = [];
+    readonly List<(int Obs, Pillar P, int Gap, int HpCost)> _pairs = [];
     Pillar?[] _assigned = new Pillar?[8];
     int _stamp;
 
     /// <summary>Pillars remembered now (tests).</summary>
     public int Count => _pillars.Count;
 
-    /// <summary>One poll: the readable timers in slot order (minutes). Adds (slot, minutes) to
-    /// <paramref name="fire"/> for each pillar that alerts now.</summary>
-    public void Update(IReadOnlyList<int> minutes, DateTime now, int threshold, List<(int Slot, int Minutes)> fire)
+    /// <summary>Time-only poll (tests).</summary>
+    public void Update(IReadOnlyList<int> minutes, DateTime now, int threshold, List<Alert> fire) =>
+        Update(minutes.Select(m => new Reading(m)).ToList(), now, threshold, fire, null);
+
+    /// <summary>One poll: the readable timers in slot order. Adds each alert raised now to
+    /// <paramref name="fire"/>; <paramref name="hpOut"/> (optional) gets each reading's pillar HP
+    /// (never rising; -1 unknown), in the same order.</summary>
+    public void Update(IReadOnlyList<Reading> readings, DateTime now, int threshold, List<Alert> fire, List<int>? hpOut)
     {
         _stamp++;
         _pillars.RemoveAll(p => p.Minutes - (now - p.ReadAt).TotalMinutes < -forgetAfterMinutes
                                 || (p.Reads < stablePolls && (now - p.ReadAt).TotalSeconds > 3));
-        if (_assigned.Length < minutes.Count) _assigned = new Pillar?[minutes.Count * 2];
+        if (_assigned.Length < readings.Count) _assigned = new Pillar?[readings.Count * 2];
         Array.Clear(_assigned);
 
         _pairs.Clear();
-        for (int i = 0; i < minutes.Count; i++)
+        for (int i = 0; i < readings.Count; i++)
             foreach (var p in _pillars)
             {
-                int gap = p.Minutes - minutes[i];
-                if (gap >= 0 && gap <= (int)((now - p.ReadAt).TotalSeconds / 60) + 1) _pairs.Add((i, p, gap));
+                int gap = p.Minutes - readings[i].Minutes;
+                if (gap < 0 || gap > (int)((now - p.ReadAt).TotalSeconds / 60) + 1) continue;
+                int h = readings[i].Hp, cost = 0;
+                if (h >= 0 && p.Hp >= 0) cost = h > p.Hp + hpRiseTolerance ? 1000 : Math.Max(0, p.Hp - h);
+                _pairs.Add((i, p, gap, cost));
             }
-        // Smallest difference first; on a tie the pillar read more often (established) wins.
-        _pairs.Sort((a, b) => a.Gap != b.Gap ? a.Gap.CompareTo(b.Gap) : b.P.Reads.CompareTo(a.P.Reads));
-        foreach (var (obs, p, _) in _pairs)
+        // Smallest time difference first; on a tie the closer HP (never rising), then the pillar
+        // read more often (established) wins.
+        _pairs.Sort((a, b) => a.Gap != b.Gap ? a.Gap.CompareTo(b.Gap)
+                            : a.HpCost != b.HpCost ? a.HpCost.CompareTo(b.HpCost)
+                            : b.P.Reads.CompareTo(a.P.Reads));
+        foreach (var (obs, p, _, _) in _pairs)
         {
             if (_assigned[obs] is not null || p.Taken == _stamp) continue;
             _assigned[obs] = p;
             p.Taken = _stamp;
         }
+        // Not seen this poll: a pending HP drop needs two consecutive polls.
+        foreach (var p in _pillars) if (p.Taken != _stamp) p.PendingHp = -1;
 
-        for (int i = 0; i < minutes.Count; i++)
+        hpOut?.Clear();
+        for (int i = 0; i < readings.Count; i++)
         {
             var p = _assigned[i];
             if (p is null)
@@ -303,23 +416,64 @@ public sealed class WarPillarTracker(int stablePolls, int forgetAfterMinutes)
                 p = new Pillar { Taken = _stamp };
                 _pillars.Add(p);
             }
-            p.Minutes = minutes[i];
+            p.Minutes = readings[i].Minutes;
             p.ReadAt = now;
             p.Reads++;
+            UpdateHp(p, readings[i].Hp);
             if (!p.Alerted && p.Reads >= stablePolls && p.Minutes <= threshold)
             {
                 p.Alerted = true;
-                fire.Add((i, p.Minutes));
+                fire.Add(new Alert(i, p.Minutes));
             }
+            if (p.Reads >= stablePolls && p.Hp >= 0)
+            {
+                int level = LevelOf(p.Hp);
+                if (level < p.HpLevelAlerted)
+                {
+                    p.HpLevelAlerted = level;
+                    fire.Add(new Alert(i, p.Minutes, level));
+                }
+            }
+            hpOut?.Add(p.Hp);
         }
+    }
+
+    void UpdateHp(Pillar p, int h)
+    {
+        if (h < 0) { p.PendingHp = -1; return; }   // unreadable: never a drop
+        if (p.Hp < 0) { p.Hp = h; p.PendingHp = -1; return; }
+        if (p.Reads <= stablePolls)
+        {
+            // Not confirmed yet: the higher reading (a misread is low: something over the bar).
+            p.Hp = Math.Max(p.Hp, h);
+            p.PendingHp = -1;
+            return;
+        }
+        if (h >= p.Hp) { p.PendingHp = -1; return; }   // never rises
+        if (p.PendingHp >= 0)
+        {
+            p.Hp = Math.Max(p.PendingHp, h);
+            p.PendingHp = -1;
+        }
+        else p.PendingHp = h;
+    }
+
+    /// <summary>The lowest level the HP is below, or NoLevel.</summary>
+    int LevelOf(int hp)
+    {
+        int best = NoLevel;
+        foreach (int l in _levels) if (hp < l && l < best) best = l;
+        return best;
     }
 }
 
 /// <summary>
 /// Row "เสาวอ": one alert per pillar when its remaining time reaches the user's minutes
 /// ("แจ้งเมื่อเหลือ N นาที", default DefaultMinutes, 1..120), with a crop of that pillar's label box
-/// and icon. "ตอนนี้": every timer left to right ("00:15 · 00:42"), "ไม่มี" without panels (no war:
-/// never unreadable), "?" only while the game's tooltip text covers a panel that was showing (the
+/// and icon. Same checkbox: one alert per pillar per HP level (HpLevels, fixed) when its HP bar
+/// drops below it ("เสาวอเลือดเหลือ X%!", same crop). "ตอนนี้": every timer left to right with its
+/// pillar's HP ("00:15 (80%) · 00:42 (100%)"), "ไม่มี" without panels (no war: never unreadable),
+/// "?" only while the game's tooltip text covers a panel (timer or HP bar) that was showing (the
 /// only way into "อ่านค่าไม่ได้", as for the kill counter). A box whose timer cannot be read without
 /// tooltip text leaves the row as it was.
 /// </summary>
@@ -334,8 +488,9 @@ public sealed class WarPillarDetector : IHudDetector
     readonly HudReadings _readings;
     readonly HudOptions _options;
     readonly List<PillarPanel> _panels = [];
-    readonly List<int> _values = [], _slots = [], _shownValues = [];
-    readonly List<(int Slot, int Minutes)> _fire = [];
+    readonly List<WarPillarTracker.Reading> _values = [];
+    readonly List<int> _slots = [], _hp = [], _shown = [];
+    readonly List<WarPillarTracker.Alert> _fire = [];
     readonly List<Rectangle> _lastBoxes = [];
     bool _showing;
 
@@ -343,7 +498,7 @@ public sealed class WarPillarDetector : IHudDetector
     {
         _c = config.WarPillar;
         _finder = new WarPillarFinder(_c);
-        _tracker = new WarPillarTracker(_c.StablePolls, _c.ForgetAfterMinutes);
+        _tracker = new WarPillarTracker(_c.StablePolls, _c.ForgetAfterMinutes, _c.HpLevels, _c.HpRiseTolerance);
         _readings = readings;
         _options = options;
     }
@@ -355,14 +510,25 @@ public sealed class WarPillarDetector : IHudDetector
 
     public static string Format(int minutes) => $"{minutes / 60:00}:{minutes % 60:00}";
 
-    /// <summary>Remaining minutes of the first (smallest) timer in a "ตอนนี้" text ("00:15 · 00:42"
-    /// -> 15); false for anything else.</summary>
+    /// <summary>"00:15 (80%)", or "00:15" while the pillar's HP is unknown.</summary>
+    public static string Format(int minutes, int hp) => hp < 0 ? Format(minutes) : $"{Format(minutes)} ({hp}%)";
+
+    /// <summary>Remaining minutes of the first (smallest) timer in a "ตอนนี้" text ("00:15 (80%) ·
+    /// 00:42 (100%)" or "00:15 · 00:42" -> 15); false for anything else.</summary>
     public static bool TryParseRow(string text, out int minutes)
     {
         minutes = int.MaxValue;
         if (text.Length < 5) return false;
-        foreach (var part in text.Split(" · "))
+        foreach (var item in text.Split(" · "))
         {
+            var part = item;
+            int paren = part.IndexOf(" (", StringComparison.Ordinal);
+            if (paren > 0)
+            {
+                var hp = part.AsSpan(paren + 2);
+                if (!hp.EndsWith("%)") || !int.TryParse(hp[..^2], System.Globalization.NumberStyles.None, null, out _)) { minutes = 0; return false; }
+                part = part[..paren];
+            }
             int c = part.IndexOf(':');
             if (c < 1 || part.Length - c != 3 || !int.TryParse(part.AsSpan(0, c), System.Globalization.NumberStyles.None, null, out int h)
                 || !int.TryParse(part.AsSpan(c + 1), System.Globalization.NumberStyles.None, null, out int m) || m >= 60) { minutes = 0; return false; }
@@ -380,7 +546,14 @@ public sealed class WarPillarDetector : IHudDetector
         for (int i = 0; i < _panels.Count; i++)
         {
             var p = _panels[i];
-            if (p.Readable) { _values.Add(p.Minutes); _slots.Add(i); }
+            if (p.Readable)
+            {
+                _values.Add(new WarPillarTracker.Reading(p.Minutes, p.Hp));
+                _slots.Add(i);
+                // Tooltip text over the bar: unreadable (the 10 s rule), never a drop. A bar that
+                // cannot be measured without it: the timer still shows, with the pillar's last HP.
+                if (p.HpCovered) covered = true;
+            }
             else if (p.Covered) covered = true;
             else hold = true;
         }
@@ -396,9 +569,11 @@ public sealed class WarPillarDetector : IHudDetector
 
         int threshold = ThresholdMinutes;
         _fire.Clear();
-        _tracker.Update(_values, now, threshold, _fire);
-        foreach (var (slot, minutes) in _fire)
-            events.Add(new WatchEvent(WatchEventKind.Hud, string.Format(_c.Message, minutes), now, AlertIds.WarPillar, _panels[_slots[slot]].Crop));
+        _tracker.Update(_values, now, threshold, _fire, _hp);
+        foreach (var a in _fire)
+            events.Add(new WatchEvent(WatchEventKind.Hud,
+                a.HpLevel > 0 ? string.Format(_c.HpMessage, a.HpLevel) : string.Format(_c.Message, a.Minutes),
+                now, AlertIds.WarPillar, _panels[_slots[a.Slot]].Crop));
 
         if (covered)
         {
@@ -409,7 +584,7 @@ public sealed class WarPillarDetector : IHudDetector
         {
             _showing = false;
             _lastBoxes.Clear();
-            _shownValues.Clear();
+            _shown.Clear();
             _readings.Set(AlertIds.WarPillar, NoPanelText);
             return;
         }
@@ -418,13 +593,18 @@ public sealed class WarPillarDetector : IHudDetector
         _lastBoxes.Clear();
         foreach (var p in _panels) _lastBoxes.Add(p.Box);
         bool reached = false;
-        foreach (int v in _values) reached |= v <= threshold;
+        foreach (var v in _values) reached |= v.Minutes <= threshold;
+        // Shown: each timer with its pillar's HP (never rising). Rebuilt only when something changed.
+        bool same = _shown.Count == _values.Count * 2;
+        for (int i = 0; same && i < _values.Count; i++) same = _shown[2 * i] == _values[i].Minutes && _shown[2 * i + 1] == _hp[i];
         var current = _readings.Get(AlertIds.WarPillar);
-        if (!_values.SequenceEqual(_shownValues) || current.Reached != reached || current.Text == RowReading.Unknown || current.Text == RowReading.None)
+        if (!same || current.Reached != reached || current.Text == RowReading.Unknown || current.Text == RowReading.None)
         {
-            _shownValues.Clear();
-            _shownValues.AddRange(_values);
-            _readings.Set(AlertIds.WarPillar, string.Join(" · ", _values.Select(Format)), reached);
+            _shown.Clear();
+            for (int i = 0; i < _values.Count; i++) { _shown.Add(_values[i].Minutes); _shown.Add(_hp[i]); }
+            var parts = new string[_values.Count];
+            for (int i = 0; i < parts.Length; i++) parts[i] = Format(_values[i].Minutes, _hp[i]);
+            _readings.Set(AlertIds.WarPillar, string.Join(" · ", parts), reached);
         }
     }
 
@@ -432,7 +612,7 @@ public sealed class WarPillarDetector : IHudDetector
     public void Reset()
     {
         _lastBoxes.Clear();
-        _shownValues.Clear();
+        _shown.Clear();
         _readings.Set(AlertIds.WarPillar, RowReading.None);
     }
 }

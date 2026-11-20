@@ -41,6 +41,10 @@ Discord bot (Discord.Net, runs inside the app).
   searched along the strip under the gauge; HH:MM read pixel-exactly as Tahoma (11 px at 1.0);
   pillars tracked by remaining time (never slot); one alert per pillar at <= N minutes (row
   "เสาวอ แจ้งเมื่อเหลือ N นาที", 1..120, default 10); no panel = "ไม่มี", "?" only under tooltip text.
+  Pillar HP: red bar under the timer inside the icon box (fill columns +8..+42, rows +43..+47 from
+  the blue corner at 1.0; length from the track's dark top border); fill red/orange/yellow, else empty;
+  HP never rises, a drop counts after 2 consecutive polls; one alert per pillar per level 75/50/25
+  ("เสาวอเลือดเหลือ X%!", same checkbox and crop); row "00:15 (80%) · 00:42 (100%)", "+N" when long.
 - `src/ScreenWatcher/Collection`: optional "Collect data" mode (HUD crops + full frames saved to
   %LOCALAPPDATA%\ScreenWatcher\collect, size-capped; writes on a background thread).
 - `src/ScreenWatcher/Diagnostics`: field-trial diagnostics, all under %LOCALAPPDATA%\ScreenWatcher:

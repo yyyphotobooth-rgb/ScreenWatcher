@@ -352,7 +352,30 @@
     // hidden by a window and shown again is the same pillar: no second alert).
     "forgetAfterMinutes": 2,
     // Tooltip text over an icon box (same colours as the kill counter's rule): the row shows "?".
-    "coverText": [ 215, 229 ], "coverTextMin": 6, "coverOutlineMax": 25
+    "coverText": [ 215, 229 ], "coverTextMin": 6, "coverOutlineMax": 25,
+    // Pillar HP: the red bar under the timer, inside the icon box. It shrinks right to left and
+    // never grows. Measured on all 7 panel samples (0012/0014/0015/0017, alive_small_a/b/c), all
+    // full: fill columns 8..42 (35 px) and rows 43..47 from the corner, in a track with a dark-blue
+    // top border row (barBorderY 42, columns 7..43: (30,73,116)-like) and left column (7), and a
+    // light-blue bottom row (48) and right column (43) ((156,191,225)). The full length comes from
+    // the dark top border, independent of the fill: its run minus one column at each end.
+    // HP % = fill columns from the left / that length.
+    "hpMessage": "เสาวอเลือดเหลือ {0}%!",
+    // Alert once per pillar per level when HP drops below it (several at once: the lowest).
+    "hpLevels": [ 75, 50, 25 ],
+    // Border row (1.0, from the corner) and the columns searched for its dark run; bar rows below it.
+    "barBorderY": 42, "barSearchX": [ 3, 47 ], "barHeight": 5,
+    // Expected fill length at 1.0 and the tolerance (scaled) for the measured one.
+    "barLength": 35, "barLengthTolerance": 3,
+    // Dark border: luminance at most this and blue at least barBorderMinBlue above red; the light
+    // bottom row: luminance at least barLightMinLum (and bluish).
+    "barBorderMaxLum": 90, "barBorderMinBlue": 30, "barLightMinLum": 140,
+    // Fill colour, red -> orange -> yellow (it may change colour when low): red at least fillMinRed,
+    // blue at least fillMinRedOverBlue below red, green at most fillMaxGreenOverRed above red.
+    // Anything else is empty track.
+    "fillMinRed": 110, "fillMinRedOverBlue": 60, "fillMaxGreenOverRed": 10,
+    // Matching pillars: a reading more than this many % above a pillar's HP is a worse match (HP never rises).
+    "hpRiseTolerance": 3
   },
 
   "items": {

@@ -236,7 +236,13 @@ sealed class AlertRow : Control
     {
         var names = text.Split(separator);
         if (names.Length > 1 && TextRenderer.MeasureText(text, _now.Font).Width > _now.Width)
+        {
             text = $"{names[0]} +{names.Length - 1}";
+            // Still too long ("00:08 (100%) +2"): the first item without its bracket ("00:08 +2").
+            int paren = names[0].IndexOf(" (", StringComparison.Ordinal);
+            if (paren > 0 && TextRenderer.MeasureText(text, _now.Font).Width > _now.Width)
+                text = $"{names[0][..paren]} +{names.Length - 1}";
+        }
         SetNow(text, colour);
     }
 

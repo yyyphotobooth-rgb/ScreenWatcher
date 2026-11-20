@@ -134,10 +134,10 @@ public sealed class WarPillarTests
         r.Poll(0);
         Assert.Equal(WarPillarDetector.NoPanelText, r.Text);
         r.Poll(1, 15, 42);
-        Assert.Equal("00:15 · 00:42", r.Text);
+        Assert.Equal("00:15 (100%) · 00:42 (100%)", r.Text);
         Assert.False(r.Readings.Get(AlertIds.WarPillar).Reached);
         r.Poll(2, 125);
-        Assert.Equal("02:05", r.Text);
+        Assert.Equal("02:05 (100%)", r.Text);
         r.Poll(3);
         Assert.Equal("ไม่มี", r.Text);
         Assert.Empty(r.Events);
@@ -244,7 +244,7 @@ public sealed class WarPillarTests
     public void Tracker_matches_by_remaining_time_not_slot()
     {
         var t = new WarPillarTracker(2, 2);
-        var fire = new List<(int Slot, int Minutes)>();
+        var fire = new List<WarPillarTracker.Alert>();
         t.Update([20, 21], T0, 10, fire);
         t.Update([20, 21], T0.AddSeconds(1), 10, fire);
         Assert.Equal(2, t.Count);
@@ -261,7 +261,7 @@ public sealed class WarPillarTests
     public void A_misread_new_value_seen_once_is_forgotten()
     {
         var t = new WarPillarTracker(2, 2);
-        var fire = new List<(int Slot, int Minutes)>();
+        var fire = new List<WarPillarTracker.Alert>();
         t.Update([5], T0, 10, fire);
         t.Update([], T0.AddSeconds(5), 10, fire);
         Assert.Equal(0, t.Count);
@@ -272,7 +272,7 @@ public sealed class WarPillarTests
     public void Pillars_are_forgotten_after_their_countdown_ended()
     {
         var t = new WarPillarTracker(2, 2);
-        var fire = new List<(int Slot, int Minutes)>();
+        var fire = new List<WarPillarTracker.Alert>();
         t.Update([3], T0, 10, fire);
         t.Update([3], T0.AddSeconds(1), 10, fire);
         Assert.Single(fire);
@@ -299,7 +299,7 @@ public sealed class WarPillarTests
         Assert.True(Find(covered).Count == 1 || Find(covered)[1].Covered);
 
         for (int s = 0; s < 3; s++) Both(s, r.Frames.Frame(30, 40));
-        Assert.Equal("00:30 · 00:40", r.Text);
+        Assert.Equal("00:30 (100%) · 00:40 (100%)", r.Text);
         for (int s = 3; s <= 13; s++) Both(s, covered);   // "?" from 3 s: 10 s at 13 s, not longer yet
         Assert.Equal(RowReading.Unknown, r.Text);
         Assert.Empty(events);
@@ -308,7 +308,7 @@ public sealed class WarPillarTests
         Assert.Equal(AlertIds.Unreadable, e.AlertId);
         Assert.Equal("อ่านค่าไม่ได้ : เสาวอ", e.Message);
         Both(18, r.Frames.Frame(30, 40));
-        Assert.Equal("00:30 · 00:40", r.Text);
+        Assert.Equal("00:30 (100%) · 00:40 (100%)", r.Text);
         Assert.Empty(r.Events);
     }
 
@@ -332,8 +332,200 @@ public sealed class WarPillarTests
         Assert.Equal(15, v);
         Assert.True(Diagnostics.RowStats.TryValue("02:05", out v));
         Assert.Equal(125, v);
+        Assert.True(Diagnostics.RowStats.TryValue("00:15 (80%) · 00:42 (100%)", out v));
+        Assert.Equal(15, v);
+        Assert.True(Diagnostics.RowStats.TryValue("02:05 (7%)", out v));
+        Assert.Equal(125, v);
         Assert.False(Diagnostics.RowStats.TryValue("ไม่มี", out _));
         Assert.False(Diagnostics.RowStats.TryValue("?", out _));
+    }
+
+    // ------------------------------------------------------------------ HP bar
+
+    [Fact]
+    public void Real_samples_read_full_hp()
+    {
+        var frames = new[]
+        {
+            TestData.ClientFrame(Path.Combine("from-chat", "warpillar_full_0014_1407.png"), 1, 1, 1024, 766),
+            TestData.ClientFrame(Path.Combine("from-chat", "warpillar_full_0015_1406.png"), 0, 0, 1023, 770),
+            TestData.CropOnBlackClient(Path.Combine("from-chat", "warpillar_crop_0012.png"), 175, 39),
+            TestData.CropOnBlackClient(Path.Combine("from-chat", "warpillar_crop_0017.png"), 8, 6),
+            TestData.ClientFrame(Path.Combine("from-chat", "alive_small_a.png"), 164, 187, 1152, 864),
+            TestData.ClientFrame(Path.Combine("from-chat", "alive_small_b.png"), 318, 341, 1280, 800),
+            TestData.ClientFrame(Path.Combine("from-chat", "alive_small_c.png"), 134, 155, 1600, 1024),
+        };
+        foreach (var f in frames)
+        {
+            var p = Assert.Single(Find(f));
+            Assert.Equal(100, p.Hp);   // fill reaches the light right border: all 35 columns
+            Assert.False(p.HpCovered);
+        }
+    }
+
+    [Theory]
+    [InlineData(PanelFrames.BarFill.Red, PanelFrames.BarEmpty.Grey)]
+    [InlineData(PanelFrames.BarFill.Red, PanelFrames.BarEmpty.DarkRed)]
+    [InlineData(PanelFrames.BarFill.Orange, PanelFrames.BarEmpty.Grey)]
+    [InlineData(PanelFrames.BarFill.Yellow, PanelFrames.BarEmpty.DarkRed)]
+    public void Bars_cut_to_a_level_are_measured(PanelFrames.BarFill fill, PanelFrames.BarEmpty empty)
+    {
+        var frames = new PanelFrames();
+        foreach (int hp in new[] { 100, 80, 74, 49, 24, 10, 0 })
+        {
+            var p = Assert.Single(Find(frames.Frame(new PanelFrames.P(20, hp, fill, empty))));
+            Assert.Equal(20, p.Minutes);
+            Assert.Equal(PanelFrames.ReadBack(hp), p.Hp);        // whole columns of 35: within 1.5 %
+            Assert.True(Math.Abs(p.Hp - hp) <= 2, $"{hp} -> {p.Hp}");
+            // The level side is right for every cut used by the alerts.
+            foreach (int level in new[] { 75, 50, 25 }) Assert.Equal(hp < level, p.Hp < level);
+        }
+    }
+
+    [Fact]
+    public void Several_panels_each_have_their_own_hp()
+    {
+        var list = Find(new PanelFrames().Frame(new PanelFrames.P(15, 80), new(42, 100), new(70, 24, PanelFrames.BarFill.Yellow)));
+        Assert.Equal([15, 42, 70], list.Select(p => p.Minutes));
+        Assert.Equal([80, 100, PanelFrames.ReadBack(24)], list.Select(p => p.Hp));
+    }
+
+    [Fact]
+    public void Row_shows_each_timer_with_its_hp()
+    {
+        var r = new Run();
+        r.Poll(0, r.Frames.Frame(new PanelFrames.P(15, 80), new(42, 100)));
+        Assert.Equal("00:15 (80%) · 00:42 (100%)", r.Text);
+        Assert.True(WarPillarDetector.TryParseRow(r.Text, out int m));
+        Assert.Equal(15, m);
+    }
+
+    static PanelFrames.P Hp(int minutes, int hp) => new(minutes, hp);
+
+    [Fact]
+    public void Drop_from_80_to_40_gives_one_50_percent_alert_with_the_pillar_crop()
+    {
+        var r = new Run(10);
+        r.Poll(0, r.Frames.Frame(Hp(40, 80)));
+        r.Poll(1, r.Frames.Frame(Hp(40, 80)));
+        Assert.Empty(r.Events);
+        Assert.Empty(r.Poll(2, r.Frames.Frame(Hp(40, 40))));        // one poll: not yet
+        Assert.Equal("00:40 (80%)", r.Text);
+        var e = Assert.Single(r.Poll(3, r.Frames.Frame(Hp(40, 40))));
+        Assert.Equal("เสาวอเลือดเหลือ 50%!", e.Message);
+        Assert.Equal(AlertIds.WarPillar, e.AlertId);
+        Assert.Equal(new Rectangle(CornerX - 80, CornerY - 4, 128, 56), e.Crop);
+        Assert.Equal($"00:40 ({PanelFrames.ReadBack(40)}%)", r.Text);
+        for (int s = 4; s < 20; s++) Assert.Empty(r.Poll(s, r.Frames.Frame(Hp(40, 40))));
+        Assert.Single(r.Events);
+    }
+
+    [Fact]
+    public void Each_level_alerts_once_and_a_one_poll_dip_or_a_rise_does_not_count()
+    {
+        var t = new WarPillarTracker(2, 2, [75, 50, 25]);
+        var fire = new List<WarPillarTracker.Alert>();
+        var hpOut = new List<int>();
+        int s = 0;
+        void Poll(int hp) => t.Update([new WarPillarTracker.Reading(60, hp)], T0.AddSeconds(s++), 10, fire, hpOut);
+
+        Poll(100); Poll(100);
+        Poll(20); Poll(100); Poll(20); Poll(100);           // single-poll misreads: nothing
+        Assert.Empty(fire);
+        Assert.Equal(100, hpOut[0]);
+        Poll(70); Poll(70);                                 // 75
+        Poll(90); Poll(90);                                 // a rise is ignored
+        Assert.Equal(70, hpOut[0]);
+        Poll(74); Poll(72);                                 // still above 50: no alert
+        Poll(45); Poll(45);                                 // 50
+        Poll(30); Poll(30);
+        Poll(20); Poll(20);                                 // 25
+        Poll(10); Poll(10); Poll(0); Poll(0);
+        Assert.Equal([75, 50, 25], fire.Select(a => a.HpLevel));
+        Assert.All(fire, a => Assert.Equal(0, a.Slot));
+    }
+
+    [Fact]
+    public void Skipping_several_levels_gives_one_alert_for_the_lowest()
+    {
+        var r = new Run(10);
+        r.Poll(0, r.Frames.Frame(Hp(40, 80)));
+        r.Poll(1, r.Frames.Frame(Hp(40, 80)));
+        r.Poll(2, r.Frames.Frame(Hp(40, 10)));
+        var e = Assert.Single(r.Poll(3, r.Frames.Frame(Hp(40, 10))));
+        Assert.Equal("เสาวอเลือดเหลือ 25%!", e.Message);
+        Assert.Empty(r.Poll(4, r.Frames.Frame(Hp(40, 0))));
+        Assert.Empty(r.Poll(5, r.Frames.Frame(Hp(40, 0))));
+        Assert.Single(r.Events);
+    }
+
+    [Fact]
+    public void A_pillar_first_seen_below_a_level_alerts_once_for_the_lowest()
+    {
+        var r = new Run(10);
+        Assert.Empty(r.Poll(0, r.Frames.Frame(Hp(40, 45))));
+        var e = Assert.Single(r.Poll(1, r.Frames.Frame(Hp(40, 45))));
+        Assert.Equal("เสาวอเลือดเหลือ 50%!", e.Message);
+        Assert.Empty(r.Poll(2, r.Frames.Frame(Hp(40, 45))));
+    }
+
+    [Fact]
+    public void Tooltip_over_the_bar_is_unreadable_never_a_drop_then_a_lower_reading_alerts()
+    {
+        var r = new Run(10);
+        var unread = new UnreadableDetector(C, r.Readings, r.Options, () => 0);
+        var events = new List<WatchEvent>();
+        foreach (var row in C.Unreadable.Rows) r.Readings.Set(row[0], RowReading.None);
+        void Both(int s, Frame f) { r.Poll(s, f); unread.Process(r.Now, 1024, 768, events); }
+
+        var covered = r.Frames.Frame(Hp(40, 30));
+        PanelFrames.Tooltip(covered, CornerX + 4, CornerY + 40, "HP 30%");
+        var p = Assert.Single(Find(covered));
+        Assert.Equal(40, p.Minutes);                        // the timer is still read
+        Assert.True(p.HpCovered);
+        Assert.Equal(-1, p.Hp);
+
+        for (int s = 0; s < 3; s++) Both(s, r.Frames.Frame(Hp(40, 80)));
+        Assert.Equal("00:40 (80%)", r.Text);
+        for (int s = 3; s <= 13; s++) Both(s, covered);
+        Assert.Equal(RowReading.Unknown, r.Text);
+        Assert.Empty(events);
+        for (int s = 14; s <= 17; s++) Both(s, covered);
+        var u = Assert.Single(events);
+        Assert.Equal("อ่านค่าไม่ได้ : เสาวอ", u.Message);
+        Assert.Empty(r.Events);                            // no HP alert while covered
+
+        // Tooltip gone, the bar now lower: alerts normally (two polls).
+        Both(18, r.Frames.Frame(Hp(40, 30)));
+        Assert.Empty(r.Events);
+        Both(19, r.Frames.Frame(Hp(40, 30)));
+        Assert.Equal("เสาวอเลือดเหลือ 50%!", Assert.Single(r.Events).Message);
+        Assert.Equal($"00:40 ({PanelFrames.ReadBack(30)}%)", r.Text);
+    }
+
+    [Fact]
+    public void Two_pillars_with_different_hp_are_tracked_separately_after_the_left_shift()
+    {
+        var r = new Run(10);
+        // A ends soon; B and C have the SAME remaining time, so only HP tells them apart.
+        r.Poll(0, r.Frames.Frame(Hp(5, 100), Hp(30, 90), Hp(30, 80)));
+        var first = r.Poll(1, r.Frames.Frame(Hp(5, 100), Hp(30, 90), Hp(30, 80)));
+        Assert.Equal("เสาวอเหลือ 5 นาที!", Assert.Single(first).Message);   // A's time alert
+        // A gone: B and C shift one slot left.
+        for (int s = 360; s < 365; s++) Assert.Empty(r.Poll(s, r.Frames.Frame(Hp(24, 90), Hp(24, 80))));
+        Assert.Equal($"00:24 ({PanelFrames.ReadBack(90)}%) · 00:24 (80%)", r.Text);
+        // C (now slot 1) drops below 75.
+        Assert.Empty(r.Poll(365, r.Frames.Frame(Hp(24, 90), Hp(24, 70))));
+        var c = Assert.Single(r.Poll(366, r.Frames.Frame(Hp(24, 90), Hp(24, 70))));
+        Assert.Equal("เสาวอเลือดเหลือ 75%!", c.Message);
+        Assert.Equal(new Rectangle(CornerX - 80 + Pitch, CornerY - 4, 128, 56), c.Crop);
+        // B (slot 0) drops below 50 (skipping 75): one alert, its own crop; C unchanged: nothing.
+        Assert.Empty(r.Poll(367, r.Frames.Frame(Hp(24, 45), Hp(24, 70))));
+        var b = Assert.Single(r.Poll(368, r.Frames.Frame(Hp(24, 45), Hp(24, 70))));
+        Assert.Equal("เสาวอเลือดเหลือ 50%!", b.Message);
+        Assert.Equal(new Rectangle(CornerX - 80, CornerY - 4, 128, 56), b.Crop);
+        for (int s = 369; s < 380; s++) Assert.Empty(r.Poll(s, r.Frames.Frame(Hp(24, 45), Hp(24, 70))));
+        Assert.Equal(3, r.Events.Count);
     }
 
     // ------------------------------------------------------------------ settings
@@ -387,7 +579,7 @@ public sealed class WarPillarTests
 /// in Tahoma 11 (the game's font: white, 1-px black outline, first digit's top-left ink at corner
 /// +5,+28). Slots without a timer are left as the sample's scenery.
 /// </summary>
-sealed class PanelFrames
+public sealed class PanelFrames
 {
     const int CornerX = 254, CornerY = 48, Pitch = 130;
     readonly Bitmap _base, _panel;
@@ -403,13 +595,50 @@ sealed class PanelFrames
         g.DrawImage(bg, new Rectangle(CornerX - 80, CornerY - 4, 128, 56));
     }
 
-    public Frame Frame(params int[] minutes)
+    /// <summary>One panel: timer, HP % (the sample's full bar cut to it), fill colour and empty-track
+    /// colour.</summary>
+    public readonly record struct P(int Minutes, int Hp = 100, BarFill Fill = BarFill.Red, BarEmpty Empty = BarEmpty.Grey);
+
+    public enum BarFill { Red, Orange, Yellow }
+    public enum BarEmpty { Grey, DarkRed }
+
+    /// <summary>Fill columns of the 35-px bar for an HP % (what the reader should report back).</summary>
+    public static int Columns(int hp) => (int)Math.Round(BarLength * hp / 100.0);
+    public static int ReadBack(int hp) => (int)Math.Round(100.0 * Columns(hp) / BarLength);
+    const int BarLength = 35;
+
+    public Frame Frame(params int[] minutes) => Frame(minutes.Select(m => new P(m)).ToArray());
+
+    public Frame Frame(params P[] panels)
     {
         using var bmp = new Bitmap(_base);
         using (var g = Graphics.FromImage(bmp))
-            for (int i = 0; i < minutes.Length; i++) g.DrawImageUnscaled(_panel, CornerX - 80 + Pitch * i, CornerY - 4);
-        for (int i = 0; i < minutes.Length; i++) WriteTimer(bmp, CornerX + Pitch * i, CornerY, minutes[i]);
+            for (int i = 0; i < panels.Length; i++) g.DrawImageUnscaled(_panel, CornerX - 80 + Pitch * i, CornerY - 4);
+        for (int i = 0; i < panels.Length; i++)
+        {
+            WriteTimer(bmp, CornerX + Pitch * i, CornerY, panels[i].Minutes);
+            CutBar(bmp, CornerX + Pitch * i, CornerY, panels[i]);
+        }
         return Imaging.Frame.FromBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+    }
+
+    /// <summary>The bar (fill columns corner+8..+42, rows +43..+47): columns past the HP become
+    /// empty track; the rest keep the sample's red shading, recoloured to orange/yellow.</summary>
+    static void CutBar(Bitmap bmp, int cx, int cy, P p)
+    {
+        int cols = Columns(p.Hp);
+        for (int dx = 0; dx < BarLength; dx++)
+            for (int y = cy + 43; y <= cy + 47; y++)
+            {
+                int x = cx + 8 + dx;
+                var c = bmp.GetPixel(x, y);
+                if (dx >= cols)
+                    bmp.SetPixel(x, y, p.Empty == BarEmpty.Grey ? Color.FromArgb(30, 30, 30) : Color.FromArgb(70, 18, 18));
+                else if (p.Fill == BarFill.Orange)
+                    bmp.SetPixel(x, y, Color.FromArgb(c.R, c.R * 55 / 100, c.B / 4));
+                else if (p.Fill == BarFill.Yellow)
+                    bmp.SetPixel(x, y, Color.FromArgb(c.R, c.R * 95 / 100, c.B / 4));
+            }
     }
 
     static void WriteTimer(Bitmap bmp, int cx, int cy, int minutes)

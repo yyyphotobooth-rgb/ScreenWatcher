@@ -269,4 +269,7 @@ public sealed record WarPillarConfig(
     string Message, int DefaultMinutes, double FrameY, int SearchY, double SearchLeft, int[] FrameColor, int FrameTolerance,
     int FrameWidth, int FrameHeight, double FrameMinShare, int OutlineMinLum, int[] TimerX, int[] TimerY, int InkMin,
     string FontFace, int FontMinHeight, int FontMaxHeight, int[] Crop, int StablePolls, int ForgetAfterMinutes,
-    int[] CoverText, int CoverTextMin, int CoverOutlineMax);
+    int[] CoverText, int CoverTextMin, int CoverOutlineMax,
+    string HpMessage, int[] HpLevels, int BarBorderY, int[] BarSearchX, int BarHeight, int BarLength, int BarLengthTolerance,
+    int BarBorderMaxLum, int BarBorderMinBlue, int BarLightMinLum, int FillMinRed, int FillMinRedOverBlue, int FillMaxGreenOverRed,
+    int HpRiseTolerance);
