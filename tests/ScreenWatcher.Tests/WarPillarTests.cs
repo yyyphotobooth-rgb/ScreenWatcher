@@ -95,6 +95,35 @@ public sealed class WarPillarTests
         Assert.Equal(new Rectangle(CornerX - 80 + Pitch, CornerY - 4, 128, 56), list[1].Crop);
     }
 
+    [Fact]
+    public void Two_stacked_panels_are_read_top_to_bottom_with_their_hp()
+    {
+        // 2026-11-20 19:05 (client = the whole 1024x768 image): 00:01 with its bar about 60 % (the
+        // empty right part is dark), and under it 00:51 at 100 %.
+        var f = TestData.ClientFrame(Path.Combine("from-chat", "warpillar_two_stacked_1905.png"), 0, 0, 1024, 768);
+        var m = new HudScaleLocator(C.HudScale).Measure(f);
+        Assert.True(m.Found);
+        Assert.Equal(HudScale.One, HudLayout.Snap(m.Scale));
+        var list = Find(f);
+        Assert.Equal([1, 51], list.Select(p => p.Minutes));
+        Assert.Equal([new Point(CornerX - 1, CornerY - 1), new Point(CornerX - 1, CornerY - 1 + PanelFrames.StackPitch)],
+            list.Select(p => p.Box.Location));
+        Assert.InRange(list[0].Hp, 57, 63);
+        Assert.Equal(100, list[1].Hp);
+        Assert.All(list, p => Assert.False(p.Covered || p.HpCovered));
+        Assert.Equal(new Rectangle(CornerX - 80, CornerY - 4 + PanelFrames.StackPitch, 128, 56), list[1].Crop);
+    }
+
+    [Fact]
+    public void Three_stacked_panels_are_read_top_to_bottom()
+    {
+        var list = Find(new PanelFrames().Stacked(new PanelFrames.P(15, 80), new(42, 100), new(70, 24, PanelFrames.BarFill.Yellow)));
+        Assert.Equal([15, 42, 70], list.Select(p => p.Minutes));
+        Assert.Equal([80, 100, PanelFrames.ReadBack(24)], list.Select(p => p.Hp));
+        Assert.Equal([CornerY - 1, CornerY - 1 + 55, CornerY - 1 + 110], list.Select(p => p.Box.Y));
+        Assert.All(list, p => Assert.Equal(CornerX - 1, p.Box.X));
+    }
+
     // ------------------------------------------------------------------ tracking and alerts
 
     sealed class Run
@@ -280,6 +309,76 @@ public sealed class WarPillarTests
         Assert.Equal(1, t.Count);
         t.Update([], T0.AddMinutes(6), 10, fire);
         Assert.Equal(0, t.Count);
+    }
+
+    static Rectangle StackCrop(int slot) => new(CornerX - 80, CornerY - 4 + PanelFrames.StackPitch * slot, 128, 56);
+
+    [Fact]
+    public void Stacked_top_pillar_ends_and_the_others_shift_up_without_duplicate_or_missed_alerts()
+    {
+        var r = new Run(10);
+        WatchEvent Only(double s, params int[] t) => Assert.Single(r.Poll(s, r.Frames.Stacked(t)));
+        void None(double s, params int[] t) => Assert.Empty(r.Poll(s, r.Frames.Stacked(t)));
+
+        None(0, 11, 30, 45);
+        None(1, 11, 30, 45);
+        Assert.Equal("00:11 (100%) · 00:30 (100%) · 00:45 (100%)", r.Text);
+        var a = Only(60, 10, 29, 44);                          // A (top)
+        Assert.Equal(StackCrop(0), a.Crop);
+        None(61, 10, 29, 44);
+        None(659, 0, 19, 34);
+        // A ends: B and C move one slot UP. B now sits where A was, at 18 (> 10): no alert.
+        None(720, 18, 33);
+        None(721, 18, 33);
+        None(1199, 11, 26);
+        var b = Only(1260, 10, 25);                            // B, now on top
+        Assert.Equal(StackCrop(0), b.Crop);
+        None(1261, 10, 25);
+        None(1859, 0, 15);
+        None(1920, 14);                                        // B ended, C moved up
+        var c = Only(2160, 10);                                // C
+        Assert.Equal("เสาวอเหลือ 10 นาที!", c.Message);
+        Assert.Equal(StackCrop(0), c.Crop);
+        None(2161, 10);
+        None(2400, 6);
+        Assert.Equal(3, r.Events.Count);
+    }
+
+    [Fact]
+    public void Stacked_hp_alerts_fire_once_per_pillar_across_the_shift_up()
+    {
+        var r = new Run(5);
+        List<WatchEvent> Poll(double s, params PanelFrames.P[] p) => r.Poll(s, r.Frames.Stacked(p));
+
+        // A (top, ends soon), B and C under it.
+        Poll(0, Hp(8, 100), Hp(30, 90), Hp(40, 80));
+        Assert.Empty(Poll(1, Hp(8, 100), Hp(30, 90), Hp(40, 80)));
+        // A drops below 75 (two polls): one alert, top crop.
+        Poll(2, Hp(8, 60), Hp(30, 90), Hp(40, 80));
+        var a = Assert.Single(Poll(3, Hp(8, 60), Hp(30, 90), Hp(40, 80)));
+        Assert.Equal("เสาวอเลือดเหลือ 75%!", a.Message);
+        Assert.Equal(StackCrop(0), a.Crop);
+        // C (bottom) drops below 75.
+        Poll(4, Hp(8, 60), Hp(30, 90), Hp(40, 70));
+        var c = Assert.Single(Poll(5, Hp(8, 60), Hp(30, 90), Hp(40, 70)));
+        Assert.Equal("เสาวอเลือดเหลือ 75%!", c.Message);
+        Assert.Equal(StackCrop(2), c.Crop);
+        // A ends (its panel goes); B and C shift up. Same HP: nothing new (no second 75 % for C).
+        for (int s = 6; s < 16; s++) Assert.Empty(Poll(s, Hp(30, 90), Hp(40, 70)));
+        Assert.Equal($"00:30 ({PanelFrames.ReadBack(90)}%) · 00:40 ({PanelFrames.ReadBack(70)}%)", r.Text);
+        // B (now on top) drops below 75: its own first HP alert, top crop.
+        Assert.Empty(Poll(16, Hp(30, 70), Hp(40, 70)));
+        var b = Assert.Single(Poll(17, Hp(30, 70), Hp(40, 70)));
+        Assert.Equal("เสาวอเลือดเหลือ 75%!", b.Message);
+        Assert.Equal(StackCrop(0), b.Crop);
+        // C (now slot 1) drops below 50: one alert, slot-1 crop.
+        Assert.Empty(Poll(18, Hp(30, 70), Hp(40, 45)));
+        var c2 = Assert.Single(Poll(19, Hp(30, 70), Hp(40, 45)));
+        Assert.Equal("เสาวอเลือดเหลือ 50%!", c2.Message);
+        Assert.Equal(StackCrop(1), c2.Crop);
+        for (int s = 20; s < 40; s++) Assert.Empty(Poll(s, Hp(30, 70), Hp(40, 45)));
+        // No time alerts: the threshold is 5 min and nobody got there.
+        Assert.Equal(4, r.Events.Count);
     }
 
     // ------------------------------------------------------------------ tooltip / unreadable
@@ -609,15 +708,26 @@ public sealed class PanelFrames
 
     public Frame Frame(params int[] minutes) => Frame(minutes.Select(m => new P(m)).ToArray());
 
-    public Frame Frame(params P[] panels)
+    public Frame Frame(params P[] panels) => Draw(panels, i => (CornerX + Pitch * i, CornerY));
+
+    /// <summary>Panels stacked downward (the game's layout, warpillar_two_stacked_1905.png): slot i's
+    /// blue corner at (CornerX, CornerY + StackPitch*i).</summary>
+    public Frame Stacked(params int[] minutes) => Stacked(minutes.Select(m => new P(m)).ToArray());
+
+    public Frame Stacked(params P[] panels) => Draw(panels, i => (CornerX, CornerY + StackPitch * i));
+
+    public const int StackPitch = 55;
+
+    Frame Draw(P[] panels, Func<int, (int X, int Y)> corner)
     {
         using var bmp = new Bitmap(_base);
         using (var g = Graphics.FromImage(bmp))
-            for (int i = 0; i < panels.Length; i++) g.DrawImageUnscaled(_panel, CornerX - 80 + Pitch * i, CornerY - 4);
+            for (int i = 0; i < panels.Length; i++) g.DrawImageUnscaled(_panel, corner(i).X - 80, corner(i).Y - 4);
         for (int i = 0; i < panels.Length; i++)
         {
-            WriteTimer(bmp, CornerX + Pitch * i, CornerY, panels[i].Minutes);
-            CutBar(bmp, CornerX + Pitch * i, CornerY, panels[i]);
+            var (cx, cy) = corner(i);
+            WriteTimer(bmp, cx, cy, panels[i].Minutes);
+            CutBar(bmp, cx, cy, panels[i]);
         }
         return Imaging.Frame.FromBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
     }

@@ -322,9 +322,10 @@
   "warPillar": {
     // War pillar ("เสาวอ") panels (Detection/Hud/WarPillar*.cs): a label box "สงครามจุดยุทธศาสตร์ /
     // กำลังดำเนินอยู่" and a 46x42 icon box with the countdown HH:MM to the pillar's end, under the
-    // top-left gauge. Panels exist only during a war; extra ones appear to the right, and the rest
-    // shift left when one ends, so the whole strip is searched and pillars are tracked by their
-    // remaining time, never by slot. Measured on samples/from-chat/warpillar_full_0014_1407.png
+    // top-left gauge. Panels exist only during a war; extra ones stack DOWNWARD under the first
+    // (samples/from-chat/warpillar_two_stacked_1905.png, client (0,0) 1024x768: corners (254,48) and
+    // (254,103), stackPitchY 55) and the rest shift up when one ends; a rightward row is still
+    // searched too. Pillars are tracked by their remaining time, never by slot. Measured on samples/from-chat/warpillar_full_0014_1407.png
     // (client at (1,1), HUD 1.0) and warpillar_full_0015_1406.png (client at (0,0)): icon box
     // = 1-px light outline (241,247,255; fades to ~144 lower down on the left) with a 1-px blue line
     // (39,95,151) inside it; the blue line's top-left corner is client (254,48) at 1.0 (frameY).
@@ -334,6 +335,9 @@
     "message": "เสาวอเหลือ {0} นาที!",
     "defaultMinutes": 10,
     "frameY": 48, "searchY": 3, "searchLeft": 120,
+    // Stacked panels: next blue corner this far below the last one (+-searchY rows and columns),
+    // at most stackMax panels per column.
+    "stackPitchY": 55, "stackMax": 8,
     "frameColor": [ 39, 95, 151 ], "frameTolerance": 60,
     // Blue line (and outline) samples, 1.0 layout from the corner: left column rows 2..frameHeight, top row
     // columns 2..frameWidth. Share of samples that must match.

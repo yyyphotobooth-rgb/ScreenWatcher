@@ -4,7 +4,7 @@ using ScreenWatcher.Imaging;
 
 namespace ScreenWatcher.Detection.Hud;
 
-/// <summary>One war pillar panel found on a frame, left to right. <c>Minutes</c> = remaining time
+/// <summary>One war pillar panel found on a frame, top to bottom. <c>Minutes</c> = remaining time
 /// (HH*60+MM), -1 when the timer could not be read; <c>Covered</c>: unreadable and the game's
 /// tooltip text lies over the icon box. <c>Hp</c> = the HP bar's fill in % (0..100), -1 when the bar
 /// could not be measured; <c>HpCovered</c>: tooltip text lies over the bar.</summary>
@@ -17,8 +17,8 @@ public readonly record struct PillarPanel(Rectangle Box, Rectangle Crop, int Min
 /// Finds the war pillar ("เสาวอ") panels under the top-left gauge and reads each countdown.
 /// A panel is recognised by its icon box: a 1-px light outline with a 1-px blue line (FrameColor)
 /// inside it; the blue line's top-left corner is the panel's reference point. The strip at FrameY
-/// (+-SearchY) is searched from SearchLeft to the right edge, so any number of panels in any slot
-/// is found. The timer is Windows' Tahoma without smoothing (white, black outline): each glyph
+/// (+-SearchY) is searched from SearchLeft to the right edge, and further panels stack downward
+/// (StackPitchY apart) under each one found, so any number of panels in any slot is found. The timer is Windows' Tahoma without smoothing (white, black outline): each glyph
 /// is cut out by its ink columns and looked up pixel-exactly among Tahoma digits and ':' rendered
 /// at start-up (FontMinHeight..FontMaxHeight, like the item counts). Only "H..H:MM" with all
 /// digits of one font height is accepted. Reuses its buffers; allocates nothing per frame.
@@ -63,24 +63,57 @@ public sealed class WarPillarFinder
         }
     }
 
-    /// <summary>All panels on the frame, left to right (cleared first).</summary>
+    /// <summary>All panels on the frame, top to bottom, then left to right (cleared first). The first
+    /// row is found along the strip at FrameY; under each panel found, the next one is looked for
+    /// StackPitchY lower (+-SearchY rows and columns), down to StackMax panels per column.</summary>
     public void Find(Frame f, HudScale scale, List<PillarPanel> into)
     {
         into.Clear();
         var s = HudLayout.Snap(scale);
         int yNom = (int)Math.Round(_c.FrameY * s.Y);
         int sy = s.Y == 1 ? _c.SearchY : (int)Math.Ceiling(_c.SearchY * s.Y) + 1;
+        int sx = s.X == 1 ? _c.SearchY : (int)Math.Ceiling(_c.SearchY * s.X) + 1;
         int left = Math.Max(1, (int)Math.Round(_c.SearchLeft * s.X));
         int boxW = (int)Math.Round((_c.FrameWidth + 4) * s.X);
         int right = f.Width - boxW - 1;
+        int pitch = (int)Math.Round(_c.StackPitchY * s.Y);
         for (int x = left; x < right; x++)
             for (int y = Math.Max(1, yNom - sy); y <= yNom + sy; y++)
             {
                 if (!IsFrame(f, x, y, s)) continue;
                 into.Add(ReadPanel(f, x, y, s));
+                if (pitch > 0) FindBelow(f, s, x, y, pitch, sx, sy, right, into);
                 x += boxW;   // next panel starts after this box
                 break;
             }
+        if (into.Count > 1) into.Sort(TopThenLeft);
+    }
+
+    static readonly Comparison<PillarPanel> TopThenLeft =
+        (a, b) => a.Box.Y != b.Box.Y ? a.Box.Y.CompareTo(b.Box.Y) : a.Box.X.CompareTo(b.Box.X);
+
+    /// <summary>Panels stacked under the one at (x, y): each StackPitchY below the last one found.</summary>
+    void FindBelow(Frame f, HudScale s, int x, int y, int pitch, int sx, int sy, int right, List<PillarPanel> into)
+    {
+        int boxH = (int)Math.Round((_c.FrameHeight + 4) * s.Y);
+        for (int n = 1; n < _c.StackMax; n++)
+        {
+            int yNext = y + pitch;
+            if (yNext + boxH >= f.Height) return;
+            bool found = false;
+            for (int dy = 0; dy <= 2 * sy && !found; dy++)
+            {
+                int yy = yNext + (dy % 2 == 0 ? dy / 2 : -(dy + 1) / 2);   // nearest rows first
+                for (int xx = Math.Max(1, x - sx); xx <= Math.Min(right - 1, x + sx); xx++)
+                {
+                    if (!IsFrame(f, xx, yy, s)) continue;
+                    into.Add(ReadPanel(f, xx, yy, s));
+                    (x, y, found) = (xx, yy, true);
+                    break;
+                }
+            }
+            if (!found) return;
+        }
     }
 
     bool Blue(ReadOnlySpan<byte> px, Frame f, int x, int y)
@@ -325,7 +358,7 @@ public sealed class WarPillarFinder
 }
 
 /// <summary>
-/// Which pillar is which, from the remaining times alone (slots shift left when a pillar ends, so
+/// Which pillar is which, from the remaining times alone (slots shift up/left when a pillar ends, so
 /// a slot says nothing). A reading continues a pillar when it is not above the pillar's last
 /// reading and at most (whole minutes since that reading + 1) below it; pairs are taken smallest
 /// difference first. Anything else is a new pillar. A pillar alerts once, when it has been read on
@@ -471,7 +504,7 @@ public sealed class WarPillarTracker(int stablePolls, int forgetAfterMinutes, in
 /// Row "เสาวอ": one alert per pillar when its remaining time reaches the user's minutes
 /// ("แจ้งเมื่อเหลือ N นาที", default DefaultMinutes, 1..120), with a crop of that pillar's label box
 /// and icon. Same checkbox: one alert per pillar per HP level (HpLevels, fixed) when its HP bar
-/// drops below it ("เสาวอเลือดเหลือ X%!", same crop). "ตอนนี้": every timer left to right with its
+/// drops below it ("เสาวอเลือดเหลือ X%!", same crop). "ตอนนี้": every timer top to bottom with its
 /// pillar's HP ("00:15 (80%) · 00:42 (100%)"), "ไม่มี" without panels (no war: never unreadable),
 /// "?" only while the game's tooltip text covers a panel (timer or HP bar) that was showing (the
 /// only way into "อ่านค่าไม่ได้", as for the kill counter). A box whose timer cannot be read without

@@ -263,7 +263,8 @@ public sealed record ExpCardConfig(
 
 /// <summary>War pillar ("เสาวอ") panels (Detection/Hud/WarPillarDetector.cs). Positions are the 1.0
 /// layout relative to the icon box's blue line top-left corner (client y FrameY at 1.0; x is
-/// searched from SearchLeft to the right edge). TimerX/TimerY: inclusive band of the HH:MM text;
+/// searched from SearchLeft to the right edge; further panels stack downward, StackPitchY apart,
+/// at most StackMax per column). TimerX/TimerY: inclusive band of the HH:MM text;
 /// Crop: [x, y, width, height] of the alert picture.</summary>
 public sealed record WarPillarConfig(
     string Message, int DefaultMinutes, double FrameY, int SearchY, double SearchLeft, int[] FrameColor, int FrameTolerance,
@@ -272,4 +273,4 @@ public sealed record WarPillarConfig(
     int[] CoverText, int CoverTextMin, int CoverOutlineMax,
     string HpMessage, int[] HpLevels, int BarBorderY, int[] BarSearchX, int BarHeight, int BarLength, int BarLengthTolerance,
     int BarBorderMaxLum, int BarBorderMinBlue, int BarLightMinLum, int FillMinRed, int FillMinRedOverBlue, int FillMaxGreenOverRed,
-    int HpRiseTolerance);
+    int HpRiseTolerance, int StackPitchY = 0, int StackMax = 0);
