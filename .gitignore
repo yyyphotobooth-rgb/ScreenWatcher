@@ -483,3 +483,23 @@ $RECYCLE.BIN/
 
 # Single-file publish output (publish.ps1)
 dist/
+
+# --- GitHub upload exclusions ---
+samples/
+scratch/
+bin/
+obj/
+dist/
+*.pfx
+*.snk
+*.key
+*.pem
+*.p12
+*.token
+*token*.txt
+*.dpapi
+signing*/
+journal/
+evidence/
+collect/
+exp-tests/
