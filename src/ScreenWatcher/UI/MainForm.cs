@@ -12,6 +12,8 @@ using ScreenWatcher.ExpTest;
 using ScreenWatcher.Imaging;
 using ScreenWatcher.Logging;
 
+using ScreenWatcher.Update;
+
 namespace ScreenWatcher.UI;
 
 /// <summary>
@@ -51,6 +53,13 @@ public sealed class MainForm : Form
     readonly ExpTestService _exp;
     readonly DarkButton _openSettings = new() { Text = "ตั้งค่า" };
     readonly Label _lastAlert = MakeLabel("แจ้งเตือนล่าสุด: ยังไม่มี", Theme.Small, Theme.Muted, Theme.Background);
+    // Update banner (hidden until GitHub has a newer release; installs only on the button click).
+    readonly Card _updateBanner = new() { Visible = false };
+    readonly Label _updateText = MakeLabel("", Theme.Body, Theme.Text, Theme.Surface);
+    readonly DarkButton _updateButton = new() { Kind = ButtonKind.Primary, Text = "อัปเดต" };
+    readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = 6 * 60 * 60 * 1000 };
+    UpdateInfo? _update;
+    bool _updating;
 
     // Settings page
     readonly Panel _settingsPage = new() { Dock = DockStyle.Fill, BackColor = Theme.Background, AutoScroll = true, Visible = false };
@@ -194,7 +203,7 @@ public sealed class MainForm : Form
 
         // Everything below the table: gap, buttons, gap, last-alert line, bottom padding.
         int below = S(14) + S(44) + S(10) + S(44) + S(14) + S(22) + pad;
-        int rowsH = AlertRowCatalog.All.Sum(s => s.Implemented ? S(48) : S(44));
+        int rowsH = AlertRowCatalog.All.Sum(s => S(s.Height));
         // One page: the whole list is shown when the screen is tall enough; only on a short screen
         // the list gets its own scroll bar (the rest of the window stays put).
         var work = Screen.FromPoint(Location).WorkingArea;
@@ -209,13 +218,26 @@ public sealed class MainForm : Form
         foreach (var spec in AlertRowCatalog.All)
         {
             var row = new AlertRow(spec);
-            int rh = spec.Implemented ? S(48) : S(44);
+            int rh = S(spec.Height);
             row.SetBounds(0, ry, rowW, rh);
             ry += rh;
             if (spec.Implemented)
             {
                 row.AlertEnabled = _settings.IsAlertEnabled(spec.Id);
                 _watcher.Options.SetEnabled(spec.Id, row.AlertEnabled);
+                if (spec.SubId is { } subId)
+                {
+                    row.SubAlertEnabled = _settings.IsAlertEnabled(subId);
+                    _watcher.Options.SetEnabled(subId, row.SubAlertEnabled);
+                    row.SubAlertToggled += (r, on) =>
+                    {
+                        _settings.SetAlertEnabled(subId, on);
+                        _watcher.Options.SetEnabled(subId, on);
+                        SaveSettings();
+                        _log.Write($"Alert {subId}: {(on ? "on" : "off")}");
+                        _diag.OnSetting($"alert.{subId}.enabled", on);
+                    };
+                }
                 row.AlertToggled += (r, on) =>
                 {
                     _settings.SetAlertEnabled(r.Spec.Id, on);
@@ -505,6 +527,14 @@ public sealed class MainForm : Form
         UpdateTokenPlaceholder();
         _uiTimer.Start();
         _watcher.Start();
+        // New version: on start and every 6 h (one-file build only; silent on any error).
+        if (UpdateInstaller.CanSelfUpdate)
+        {
+            _updateButton.Click += async (_, _) => await UpdateClickAsync();
+            _updateTimer.Tick += async (_, _) => await CheckForUpdateAsync();
+            _updateTimer.Start();
+            _ = CheckForUpdateAsync();
+        }
 
         if (_noSend) _log.Write("--no-send: Discord is not connected and nothing is sent");
         else if (_tokens.Load() is { } token)
@@ -518,6 +548,7 @@ public sealed class MainForm : Form
     {
         // X exits the app (no tray).
         _uiTimer.Dispose();
+        _updateTimer.Dispose();
         _exp.Dispose();   // a running test is dropped (journalled)
         _watcher.Dispose();
         _alerts.Dispose();
@@ -526,6 +557,65 @@ public sealed class MainForm : Form
         _diag.Dispose();
         _log.Write("Exited");
         base.OnFormClosed(e);
+    }
+
+    // ---------------------------------------------------------------- update
+
+    async Task CheckForUpdateAsync()
+    {
+        if (_updating) return;
+        UpdateInfo? info;
+        try { info = await UpdateChecker.CheckAsync(UpdateVersion.Current); }
+        catch (Exception) { return; }   // silent: no network, GitHub down, odd response
+        if (info is null || _updating || IsDisposed) return;
+        if (_update?.Version != info.Version) _log.Write($"Update available: {info.Tag}");
+        _update = info;
+        ShowUpdateBanner($"มีรุ่นใหม่ {info.Display(UpdateVersion.Current)}");
+    }
+
+    /// <summary>Shows the banner under the header (the first time: everything below moves down and the window grows).</summary>
+    void ShowUpdateBanner(string text)
+    {
+        _updateText.Text = text;
+        if (_updateBanner.Visible) return;
+        int W = S(460), pad = S(18), h = S(52), shift = h + S(12);
+        foreach (Control c in _mainPage.Controls)
+            if (c.Top >= S(45)) c.Top += shift;
+        int bw = ButtonWidth(_updateButton);
+        _updateBanner.SetBounds(pad, S(45) + pad, W - pad * 2, h);
+        _updateButton.SetBounds(_updateBanner.Width - S(10) - bw, S(8), bw, h - S(16));
+        _updateText.SetBounds(S(14), 0, _updateButton.Left - S(24), h);
+        if (_updateBanner.Controls.Count == 0) _updateBanner.Controls.AddRange([_updateText, _updateButton]);
+        _mainPage.Controls.Add(_updateBanner);
+        _updateBanner.Visible = true;
+        ClientSize = new Size(ClientSize.Width, ClientSize.Height + shift);
+    }
+
+    async Task UpdateClickAsync()
+    {
+        if (_update is not { } info || _updating) return;
+        _updating = true;
+        _updateButton.Enabled = false;
+        _updateText.Text = $"กำลังดาวน์โหลดรุ่น {info.Display(UpdateVersion.Current)}...";
+        _log.Write($"Update: downloading {info.Tag}");
+        try
+        {
+            string exe = await UpdateInstaller.DownloadAndVerifyAsync(info);
+            _updateText.Text = "ตรวจลายเซ็นผ่าน กำลังติดตั้ง...";
+            UpdateInstaller.InstallAndRestart(exe, _noSend ? ["--no-send"] : []);
+            _log.Write($"Update: {info.Tag} installed, restarting");
+            Close();
+        }
+        catch (Exception ex)
+        {
+            string why = ex is UpdateFailedException ? ex.Message : "เกิดข้อผิดพลาด";
+            _log.Write("Update failed: " + why, ex.InnerException ?? ex);
+            _updateText.Font = Theme.Small;
+            _updateText.Text = $"อัปเดตไม่สำเร็จ: {why} · ใช้รุ่นเดิมต่อ";
+            _updateButton.Text = "ลองใหม่";
+            _updateButton.Enabled = true;
+            _updating = false;
+        }
     }
 
     // ---------------------------------------------------------------- watcher → UI / alerts
@@ -619,6 +709,8 @@ public sealed class MainForm : Form
                     if (r.Spec.Id == AlertIds.Unreadable) r.SetNowList(now.Text, now.Text is "ปกติ" or "—" ? null : Theme.WarnValue);
                     else if (r.Spec.Id == AlertIds.InventoryFull) r.SetNow(now.Text, now.Reached ? Theme.WarnValue : null);
                     else r.SetNow(now.Text);
+                    string? subText = r.Spec.SubId is { } subId ? _watcher.Readings.Get(subId).Text : null;
+                    if (subText is not null) r.SetSubNow(subText);
                     if (_noSend)
                     {
                         string line = now.Text + (now.Reached ? " (reached)" : "") + (now.TwoFound ? " (two)" : "");
@@ -626,6 +718,11 @@ public sealed class MainForm : Form
                         {
                             _loggedRows[r.Spec.Id] = line;
                             _log.Write($"Row {r.Spec.Id}: {line}");
+                        }
+                        if (subText is not null && (!_loggedRows.TryGetValue(r.Spec.SubId!, out var lastSub) || lastSub != subText))
+                        {
+                            _loggedRows[r.Spec.SubId!] = subText;
+                            _log.Write($"Row {r.Spec.SubId}: {subText}");
                         }
                     }
                     break;

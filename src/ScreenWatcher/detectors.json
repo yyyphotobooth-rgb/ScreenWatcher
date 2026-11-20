@@ -280,6 +280,38 @@
                "searchPx": 2, "minScore": 0.6, "minMargin": 0.03, "allowBlank": true, "blankInk": 6 }
   },
 
+  "expCard": {
+    // Sub-alert on the kill row (Detection/Hud/ExpCardDetector.cs). The EXP card is a 20x20 buff
+    // icon (blue winged emblem) in the top buff bar, icons y 1..20 at 1.0; its slot moves as other
+    // buffs come and go, so the whole bar width is searched. The countdown text ("14 นาที") covers
+    // icon rows 11..20, so only rows 1..10 are compared (the emblem below).
+    // Measured on samples/from-chat/expcard_buffbar_full.png (1024x768 client at (1,8), HUD 1.0,
+    // card = 10th icon at x 476): same emblem 0.1, next best x+-1 30, best spot with the icon masked 53.
+    "message": "บัตร exp ครบ 30 นาที",
+    // Card gone for this long, polls in a row (any poll that sees it restarts the wait).
+    "absentSeconds": 10,
+    "noCardAfterPolls": 2,
+    "emblemTop": 1, "searchLeft": 0, "searchY": 3, "searchYScaled": 5,
+    // Mean colour difference per channel (0..255). Card: 0.1 at 1.0, 13..15 on a synthetic
+    // bilinear 1.15..1.5 stretch; best spot with the card masked: 48..56.
+    "maxDistance": 28,
+    // Alert picture: the buff bar strip from x 250 to the right edge, 36 px tall (1.0 layout).
+    "cropLeft": 250, "cropHeight": 36,
+    // From samples/from-chat/expcard_icon_crop.png rows 3..12, columns 4..23 (RRGGBB per pixel).
+    "emblem": [
+      "0B274B074891064A9304438C044691044794044794044793044692044691044692044692044793044793044794044693044490064A96074A940B2C54",
+      "07489107255104163901143E0118460118460116420213410618430A1D460B1E47081A44031542011541011845011947011744041944082655084081",
+      "064A93031638000D300010390110380511370E1437151F50344C77496C8E507394425F871B2D5E11173B081236021138001038000F37031540074083",
+      "044289011035000B32000B32030B30243257748EAEA6CDDDBDE0E9B4D6DFAACED9BFDEE4BCE0E98EAEC5415274080D36000B30000C3201103A043777",
+      "165EAB19336F18204A0C1637425879A8BCCBB6CFD77694A5455971384E6F7297AF45556F56748995B4C388ACC24C698C0B163C141D43162860144F96",
+      "3478BFABBBCF8DAAC35D82ACACD1DDB8D6E3667D9B263343111C2D284A6EABBACC273757131D2C3F53697CA8C38ABEDB6288B27595B8A3BDCF497FB9",
+      "1859A152607A7D8C99B3C0C3D7D8D0DCDCD4A4BDC7849EB92340703E6FA1BCDAEA667A9E3C547998B4C9CFD9D6E2E0D6C4CDCD90A0AB677087225791",
+      "387BBE6286AB36507D314E6C32537435548038639135578937498136528EC4D7E189A6CA1C326A265A8134598338537D29466331456B4166943B76B2",
+      "3275BB8397AC9AAAB883A1B22E466D6084A86FA4CA89A6C899B6D24B6EAEB1CDDC84A7CC4D79AD5692BD79A4C5456088527A968FA7BA8C9FB13C74AD",
+      "1965B631639D3D668C7F929D6A7C9A253A6A4A80AB436398566C9E5E9CD46DABD47DA9D9A6BDE3ABCAE4546B9141547D889DAD5072902F5C94165DA8"
+    ]
+  },
+
   "items": {
     // Bottom-centre bar: ten 30x30 slot frames at exactly 31 px pitch, first frame at x c-161,
     // frames y H-47..H-18 (1024x768, 1440x1080, 1600x1024 and 1920x1080 clients: same offsets).

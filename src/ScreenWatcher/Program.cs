@@ -8,6 +8,8 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        // After an update: wait for the previous process to exit, delete its .old exe.
+        args = Update.UpdateInstaller.OnStartup(args);
         ApplicationConfiguration.Initialize();
         var config = WatcherConfig.Parse(AppFiles.ReadText(WatcherConfig.FileName));
         // --no-send: watch and show everything, but never connect to Discord and never send

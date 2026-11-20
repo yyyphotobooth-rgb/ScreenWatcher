@@ -28,7 +28,9 @@ Discord bot (Discord.Net, runs inside the app).
   unverified: `samples/README.md`. Also here: the level-up quest panel (`QuestPanel*.cs`, its own
   message instead of the generic unreadable one) and the system message box (`SystemMessage.cs`,
   `InventoryDetector.cs`: row "ช่องเก็บของเต็ม", phrase matched as Tahoma 12 px, latched until the
-  row's "รีเซ็ต" button or Discord /reset).
+  row's "รีเซ็ต" button or Discord /reset). EXP card (`ExpCardDetector.cs`): blue emblem searched
+  along the whole top buff bar (template in detectors.json `expCard`), "บัตร exp ครบ 30 นาที" after
+  10 s absent; second line of the kill row with its own checkbox; not in the unreadable rule.
 - `src/ScreenWatcher/Collection`: optional "Collect data" mode (HUD crops + full frames saved to
   %LOCALAPPDATA%\ScreenWatcher\collect, size-capped; writes on a background thread).
 - `src/ScreenWatcher/Diagnostics`: field-trial diagnostics, all under %LOCALAPPDATA%\ScreenWatcher:
@@ -45,6 +47,13 @@ Discord bot (Discord.Net, runs inside the app).
   kill counter, map label crop (`Detection/Hud/MapLabel.cs`, compared on text pixels). Results in
   %LOCALAPPDATA%\ScreenWatcher\exp-tests.
 - `src/ScreenWatcher/UI`: main window + settings page, built from `design/mockup-*.html`.
+- `src/ScreenWatcher/Update`: notify-and-click updater (one-file exe only). Checks GitHub
+  `releases/latest` on start and every 6 h (no token, silent on errors); on the banner click downloads
+  `ScreenWatcher.exe` + `ScreenWatcher.exe.sig` to %TEMP%, verifies ECDSA P-256 with the public key
+  in `UpdateSignature.PublicKey`, renames the running exe to `.old`, moves the new one in, restarts
+  (`--after-update <pid>`), deletes `.old` on the next start.
+- `tools/UpdateSigner`: release signer used by publish.ps1. Private key ONLY in
+  `C:\ScreenWatcher-keys\update-signing-private.pem` (outside the repo; never commit, log or print it).
 - `samples/`: reference images and their classification (`samples/README.md`).
 
 ## Commands
@@ -53,8 +62,8 @@ Discord bot (Discord.Net, runs inside the app).
 - Check the readers live without Discord: add `-- --no-send` (never connects or sends; alerts and
   row readings go to `%LOCALAPPDATA%\ScreenWatcher\log.txt`).
 - One-file build for friends: `powershell -ExecutionPolicy Bypass -File .\publish.ps1` ->
-  `dist\ScreenWatcher.exe` (self-contained win-x64 single file, no trimming, not compressed; dist\ is
-  git-ignored and wiped first). Version: `<Version>` in `ScreenWatcher.csproj` (title shows
+  `dist\ScreenWatcher.exe` + `dist\ScreenWatcher.exe.sig` (self-contained win-x64 single file, no
+  trimming, not compressed; dist\ is git-ignored and wiped first; signing needs the key above). Version: `<Version>` in `ScreenWatcher.csproj` (title shows
   Major.Minor). detectors.json, glyphs.json, icons.json and the guide are embedded resources
   (`AppFiles.cs`; a file next to the exe wins). Try a fresh install without touching real data:
   set `SCREENWATCHER_DATA` to an empty folder (replaces %LOCALAPPDATA%\ScreenWatcher).
@@ -62,6 +71,6 @@ Discord bot (Discord.Net, runs inside the app).
 ## GitHub upload rule
 - After every finished and committed change, ASK: "Upload to GitHub now? (yes / no / release)". Never push without that answer in the same chat.
 - yes = `git push origin main` (code backup only).
-- release = only if the owner typed "release": create GitHub release vX.Y.Z from the csproj version with the signed dist exe; requires a prior test by the owner.
+- release = only if the owner typed "release": create GitHub release vX.Y.Z from the csproj version with the signed dist exe; requires a prior test by the owner. Attach BOTH `ScreenWatcher.exe` and `ScreenWatcher.exe.sig` (exact names; the in-app updater ignores a release without both).
 - Never push tokens, signing keys, samples/, dist/, bin/, obj/. Never force-push, delete branches, or delete releases.
 - Before any push, list files changed since origin/main and stop if one is over 50 MB or matches the exclusions.

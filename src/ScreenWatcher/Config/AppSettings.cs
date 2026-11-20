@@ -120,6 +120,8 @@ public static class AlertIds
     public const string ShieldPotions = "shieldPotions";
     public const string SpPotions = "spPotions";
     public const string Kill300 = "kill300";
+    /// <summary>Sub-alert on the kill row: the EXP card left the buff bar.</summary>
+    public const string ExpCard = "expCard";
     public const string InventoryFull = "inventoryFull";
     public const string LevelUp = "levelUp";
     public const string ExpStall = "expStall";

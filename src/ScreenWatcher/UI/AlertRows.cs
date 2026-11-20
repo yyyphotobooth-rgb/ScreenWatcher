@@ -9,8 +9,15 @@ namespace ScreenWatcher.UI;
 /// Rows with a <see cref="Unit"/> have an editable threshold; <see cref="SideChooser"/> rows can
 /// show the ซ้าย/ขวา chooser (two icons of the same potion type on the item bar).
 /// </summary>
+/// Rows with a <see cref="SubId"/> have a second line: its own checkbox, label and "ตอนนี้" value
+/// (own alert id and saved on/off), e.g. the EXP card under the kill counter.
 public sealed record AlertRowSpec(string Id, string Label, bool Implemented, string? Unit = null, int? DefaultThreshold = null,
-    int MaxThreshold = 9999, bool SideChooser = false, int MinThreshold = 0, bool ResetButton = false, bool WideNow = false, int NowWidth = 72);
+    int MaxThreshold = 9999, bool SideChooser = false, int MinThreshold = 0, bool ResetButton = false, bool WideNow = false, int NowWidth = 72,
+    string? SubId = null, string? SubLabel = null)
+{
+    /// <summary>Row height at 96 dpi.</summary>
+    public int Height => !Implemented ? 44 : SubId is not null ? 72 : 48;
+}
 
 public static class AlertRowCatalog
 {
@@ -28,7 +35,8 @@ public static class AlertRowCatalog
         new(AlertIds.HpPotions, "ยาเลือดเหลือ", Implemented: true, "ชิ้น", 5, SideChooser: true),
         new(AlertIds.ShieldPotions, "ยาเกราะเหลือ", Implemented: true, "ชิ้น", 5, SideChooser: true),
         new(AlertIds.SpPotions, "ยา SP เหลือ", Implemented: true, "ชิ้น", 5, SideChooser: true),
-        new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: true),
+        // Second line: the EXP card left the buff bar ("ตอนนี้": มีบัตร / ไม่มีบัตร).
+        new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: true, SubId: AlertIds.ExpCard, SubLabel: "บัตร exp ครบ 30 นาที"),
         // "ตอนนี้": ปกติ / เต็ม (รอรีเซ็ต) (latched until "รีเซ็ต" or /reset) / ? (message box not seen).
         new(AlertIds.InventoryFull, "ช่องเก็บของเต็ม", Implemented: true, ResetButton: true),
         // "ตอนนี้": Lv.N · P% (Lv.N when the percentage is unreadable), or ? when the level line cannot be read.
@@ -60,6 +68,9 @@ sealed class AlertRow : Control
     readonly Label? _unit;
     readonly Label? _reset;
     readonly Label _now = new() { AutoSize = false, TextAlign = ContentAlignment.MiddleRight, UseMnemonic = false };
+    // Second line (Spec.SubId): own checkbox, label and value.
+    readonly DarkCheck? _subCheck;
+    readonly Label? _subLabel, _subNow;
     bool _reachedOn, _chooserOn, _watchRight;
     int _thresholdValue;
 
@@ -75,6 +86,8 @@ sealed class AlertRow : Control
     public event Action<AlertRow, bool>? SideChanged;
     /// <summary>User clicked "รีเซ็ต" (rows with ResetButton).</summary>
     public event Action<AlertRow>? ResetClicked;
+    /// <summary>User switched the second line's alert on/off (rows with SubId).</summary>
+    public event Action<AlertRow, bool>? SubAlertToggled;
 
     public AlertRow(AlertRowSpec spec)
     {
@@ -123,6 +136,16 @@ sealed class AlertRow : Control
             Controls.Add(_reset);
         }
 
+        if (spec.SubId is not null && spec.Implemented)
+        {
+            _subCheck = new DarkCheck { AccessibleName = spec.SubLabel };
+            _subLabel = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft, UseMnemonic = false, Text = spec.SubLabel, Font = Theme.Body };
+            _subNow = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleRight, UseMnemonic = false, Text = "—", Font = Theme.Value };
+            _subLabel.Click += (_, _) => _subCheck.Checked = !_subCheck.Checked;
+            _subCheck.CheckedChanged += (_, _) => SubAlertToggled?.Invoke(this, _subCheck.Checked);
+            Controls.AddRange([_subCheck, _subLabel, _subNow]);
+        }
+
         if (spec.Implemented)
         {
             _check.CheckedChanged += (_, _) => AlertToggled?.Invoke(this, _check.Checked);
@@ -144,6 +167,21 @@ sealed class AlertRow : Control
     {
         get => _check.Checked;
         set => _check.Checked = value;
+    }
+
+    /// <summary>The second line's alert switch (rows with SubId; false otherwise).</summary>
+    [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public bool SubAlertEnabled
+    {
+        get => _subCheck?.Checked ?? false;
+        set { if (_subCheck is not null) _subCheck.Checked = value; }
+    }
+
+    /// <summary>The second line's "ตอนนี้" value (rows with SubId).</summary>
+    public void SetSubNow(string text)
+    {
+        if (_subNow is null || _subNow.Text == text) return;
+        _subNow.Text = text;
     }
 
     /// <summary>The row's alert threshold (rows with a unit). Setting it does not raise ThresholdChanged.</summary>
@@ -229,6 +267,8 @@ sealed class AlertRow : Control
         _label.ForeColor = live ? Theme.Text : Theme.Disabled;
         _reached.ForeColor = Theme.WarnText;
         _now.ForeColor = _reachedOn ? Theme.WarnValue : live ? Theme.Text : Theme.Disabled;
+        if (_subLabel is not null) _subLabel.ForeColor = Theme.Text;
+        if (_subNow is not null) _subNow.ForeColor = Theme.Text;
         if (_unit is not null) _unit.ForeColor = _reachedOn ? Theme.WarnText : live ? Theme.Muted : Theme.Disabled;
         if (_reset is not null) (_reset.BackColor, _reset.ForeColor) = (Theme.Primary, Theme.Text);
         if (_threshold is not null) { _threshold.BorderColor = _reachedOn ? Theme.WarnBorder : Theme.InputBorder; _threshold.Invalidate(); }
@@ -250,6 +290,21 @@ sealed class AlertRow : Control
         x += S(18) + gap;
         int nowW = S(Spec.NowWidth), thrW = S(100);   // NowWidth 72 except "EXP ไม่ขยับเกิน" ("นิ่ง 120 นาที")
         int nowX = Width - pad - nowW;
+        if (_subCheck is not null)
+        {
+            // Two lines of equal height, each: checkbox · label · value ("ตอนนี้" also takes the
+            // threshold column: "ไม่มีบัตร" is long). The "ถึงเกณฑ์เตือนแล้ว" line is not shown here
+            // (the orange background and value still are).
+            int lh2 = h / 2, vx = nowX - gap - S(100);
+            _check.SetBounds(x, (lh2 - S(18)) / 2, S(18), S(18));
+            _label.SetBounds(x + S(18) + gap, 0, vx - gap - (x + S(18) + gap), lh2);
+            _now.SetBounds(vx, 0, Width - pad - vx, lh2);
+            _subCheck.SetBounds(x, lh2 + (lh2 - S(18)) / 2, S(18), S(18));
+            _subLabel!.SetBounds(x + S(18) + gap, lh2, vx - gap - (x + S(18) + gap), lh2);
+            _subNow!.SetBounds(vx, lh2, Width - pad - vx, lh2);
+            _reached.Visible = false;
+            return;
+        }
         _now.SetBounds(nowX, 0, nowW, h);
         int labelRight = nowX - gap;
         if (_reset is not null)
