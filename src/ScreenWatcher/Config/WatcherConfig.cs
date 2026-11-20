@@ -141,9 +141,13 @@ public sealed record FuelConfig(
 /// Target, or when the panel disappears while the last confirmed value was at least NearTarget.
 /// A value is confirmed when it equals the previous poll's reading or continues it upwards by at
 /// most MaxStepPerPoll (the counter can change every second in combat); "gone" needs StablePolls
-/// polls with no digits. Re-arms when a confirmed value is below RearmBelow.</summary>
+/// polls with no digits. Re-arms when a confirmed value is below RearmBelow.
+/// The panel counts as absent after AbsentSeconds without a number; a field without a number that
+/// holds CoverTextMin pixels of the game's light-grey tooltip text (CoverText range per channel,
+/// next to an outline at most CoverOutlineMax) is "covered" instead (see KillDetector).</summary>
 public sealed record KillConfig(
-    string Message, string CropRegion, int StablePolls, int Target, int NearTarget, int RearmBelow, int MaxStepPerPoll, DigitFieldConfig Field);
+    string Message, string CropRegion, int StablePolls, int Target, int NearTarget, int RearmBelow, int MaxStepPerPoll, DigitFieldConfig Field,
+    int AbsentSeconds = 10, int[]? CoverText = null, int CoverTextMin = 6, int CoverOutlineMax = 25);
 
 /// <summary>Item bar (Detection/Hud/ItemBar.cs). Slot k's frame starts at
 /// (W/2 + SlotLeft + SlotPitch * k, H + SlotTop) in the 1.0 layout; its interior is 28x28, one
@@ -156,7 +160,11 @@ public sealed record KillConfig(
 /// left of the icon's right edge; CountGlyphs holds the ten 8-row digit bitmaps seen at 1.0, and
 /// CountFontFace at character heights CountFontMinHeight..MaxHeight is rendered for other scales.
 /// The bar counts as visible when an icon was found or FrameMinRuns runs of FrameMinRun
-/// frame-blue pixels lie on one row at the slots' top edge.</summary>
+/// frame-blue pixels lie on one row at the slots' top edge.
+/// A slot is positively EMPTY (needed before an item counts as gone) when all four edges of its
+/// frame show frame blue on at least EmptyFrameMinShare of their length, and at least
+/// EmptyNavyMinShare of the IconRows cells are the empty slot's dark navy: every channel at most
+/// EmptyMaxChannel and blue at least EmptyMinBlueOverRed above red.</summary>
 public sealed record ItemsConfig(
     int StablePolls, int GoneStablePolls, string CropRegion, string LowMessage, string GoneMessage,
     int Slots, double SlotLeft, double SlotPitch, double SlotTop, int SearchPx, int SearchPxScaled,
@@ -164,7 +172,8 @@ public sealed record ItemsConfig(
     int CountBoxWidth, int CountBoxHeight, int CountWhiteMin, int CountDarkMax, Dictionary<string, string[]> CountGlyphs,
     string CountFontFace, int CountFontMinHeight, int CountFontMaxHeight,
     int FrameMaxR, int[] FrameG, int[] FrameB, int FrameMinRun, int FrameMinRuns,
-    ItemDef[] Items);
+    ItemDef[] Items,
+    double EmptyFrameMinShare = 0.9, int EmptyMaxChannel = 70, int EmptyMinBlueOverRed = 4, double EmptyNavyMinShare = 0.9);
 
 /// <summary>A watched item: alert row id, Thai name and unit, default threshold, the icon
 /// pictures (icons.json) that show it, for potions the kit picture whose mark it has, and

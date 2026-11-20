@@ -20,13 +20,30 @@ public class KillTests(ITestOutputHelper output)
     static KillObservation N(int v) => KillObservation.Of(v);
     static readonly KillObservation Gone = KillObservation.Gone, Bad = KillObservation.Unreadable;
 
-    /// <summary>Feeds the polls; returns the indexes where the alert fired.</summary>
+    static readonly DateTime T0 = new(2026, 11, 20, 13, 0, 0);
+    static readonly KillObservation Tip = KillObservation.CoveredByText;
+
+    /// <summary>Feeds the polls one second apart (continuing the detector's own clock); returns the
+    /// indexes where the alert fired.</summary>
     static List<int> Feed(KillDetector d, params KillObservation[] polls)
     {
         var fired = new List<int>();
-        for (int i = 0; i < polls.Length; i++) if (d.Update(polls[i])) fired.Add(i);
+        for (int i = 0; i < polls.Length; i++) if (d.Update(polls[i], Clock.Next(d))) fired.Add(i);
         return fired;
     }
+
+    static KillObservation[] Times(KillObservation o, int n) => Enumerable.Repeat(o, n).ToArray();
+    static KillObservation[] Seq(params object[] parts) =>
+        parts.SelectMany(p => p is KillObservation o ? new[] { o } : (KillObservation[])p).ToArray();
+
+    /// <summary>Per-detector poll clock (one second per poll).</summary>
+    static class Clock
+    {
+        static readonly System.Runtime.CompilerServices.ConditionalWeakTable<KillDetector, StrongBox<int>> Ticks = new();
+        public static DateTime Next(KillDetector d) => T0.AddSeconds(Ticks.GetOrCreateValue(d).Value++);
+    }
+
+    sealed class StrongBox<T> { public T Value = default!; }
 
     [Theory]
     [InlineData(1)]
@@ -41,10 +58,12 @@ public class KillTests(ITestOutputHelper output)
         int[] digitTotal = new int[10], digitRead = new int[10];
         foreach (var row in Labels("kill"))
         {
-            var r = d.ReadRaw(RegionFrame(Path.Combine(LabelledDir("kill"), row[0]), "kill", up), new HudScale(up, up));
+            var frame = RegionFrame(Path.Combine(LabelledDir("kill"), row[0]), "kill", up);
+            var r = d.ReadRaw(frame, new HudScale(up, up));
             if (row[1] == "gone")
             {
-                Assert.Equal(KillObservation.Gone, KillDetector.Observe(r));
+                // A true "gone" must stay gone (no tooltip text) with the frame-level check too.
+                Assert.Equal(KillObservation.Gone, d.Observe(frame, new HudScale(up, up)));
                 gone++;
                 continue;
             }
@@ -112,9 +131,12 @@ public class KillTests(ITestOutputHelper output)
     [MemberData(nameof(FullFrames))]
     public void Full_frame_samples_read_the_number_or_no_panel(FullSample sample, int? value)
     {
-        var r = NewDetector().ReadRaw(sample.Load(), sample.Scale);
+        var d = NewDetector();
+        var frame = sample.Load();
+        var r = d.ReadRaw(frame, sample.Scale);
         output.WriteLine($"{sample}: {r}");
         Assert.Equal(value is { } v ? KillObservation.Of(v) : KillObservation.Gone, KillDetector.Observe(r));
+        Assert.Equal(value is { } v2 ? KillObservation.Of(v2) : KillObservation.Gone, d.Observe(frame, sample.Scale));
     }
 
     [Fact]
@@ -128,37 +150,72 @@ public class KillTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Reading_300_fires_once()
+    public void Reading_300_fires_once_and_the_row_then_shows_done_not_unreadable()
     {
         var readings = new HudReadings();
         var d = NewDetector(readings);
         Assert.Equal([5], Feed(d, N(297), N(297), N(298), N(299), N(299), N(300), N(300), N(300)));
         Assert.Equal(new RowReading("300", true), readings.Get(AlertIds.Kill300));
-        // The panel then goes away: no second alert.
-        Assert.Empty(Feed(d, Gone, Gone, Gone, Gone));
-        Assert.Equal(RowReading.None, readings.Get(AlertIds.Kill300).Text);
+        // The panel then goes away for good: no second alert, "ครบแล้ว" after 10 s.
+        Assert.Empty(Feed(d, Times(Gone, 40)));
+        Assert.Equal(KillDetector.DoneText, readings.Get(AlertIds.Kill300).Text);
+        Assert.Empty(Feed(d, Times(Bad, 20)));     // unreadable scenery where the panel was: still done
+        Assert.Equal(KillDetector.DoneText, readings.Get(AlertIds.Kill300).Text);
     }
 
     [Fact]
-    public void Panel_gone_at_295_or_more_fires_and_below_that_does_not()
+    public void Panel_absent_10_s_after_295_or_more_fires_and_below_that_shows_no_panel()
     {
-        var d = NewDetector();
-        // 300 was never seen (it shows only briefly): 299, then no panel for two polls.
-        Assert.Equal([4], Feed(d, N(298), N(299), N(299), Gone, Gone, Gone, Gone));
+        var readings = new HudReadings();
+        var d = NewDetector(readings);
+        // 300 was never seen (it shows only briefly): 299, then no panel. Absent from poll 3: fires at 13.
+        Assert.Equal([13], Feed(d, Seq(N(298), N(299), N(299), Times(Gone, 15))));
+        Assert.Equal(KillDetector.DoneText, readings.Get(AlertIds.Kill300).Text);
 
-        var low = NewDetector();
-        Assert.Empty(Feed(low, N(293), N(294), N(294), Gone, Gone, Gone, Gone));  // landed at 294
+        var lowReadings = new HudReadings();
+        var low = NewDetector(lowReadings);
+        Assert.Empty(Feed(low, Seq(N(293), N(294), N(294), Times(Gone, 30))));
+        Assert.Equal(KillDetector.NoPanelText, lowReadings.Get(AlertIds.Kill300).Text);
+
         var at295 = NewDetector();
-        Assert.Equal([3], Feed(at295, N(295), N(295), Gone, Gone));
+        Assert.Equal([12], Feed(at295, Seq(N(295), N(295), Times(Bad, 12))));   // unreadable scenery counts as absent
     }
 
     [Fact]
-    public void One_poll_without_the_panel_or_unreadable_polls_do_not_fire()
+    public void No_card_used_shows_no_panel_and_never_fires()
+    {
+        var readings = new HudReadings();
+        var d = NewDetector(readings);
+        Assert.Empty(Feed(d, Seq(Times(Gone, 5), Times(Bad, 5), Times(Gone, 30))));
+        Assert.Equal(KillDetector.NoPanelText, readings.Get(AlertIds.Kill300).Text);
+    }
+
+    [Fact]
+    public void Short_absences_do_not_fire()
     {
         var d = NewDetector();
-        Assert.Empty(Feed(d, N(298), N(298), Gone, N(298), Bad, Gone, Bad, Gone, N(299), Bad, Bad, Bad, Bad));
+        Assert.Empty(Feed(d, Seq(N(298), N(298), Times(Gone, 9), N(298), Times(Bad, 5), N(298), N(299), Times(Gone, 8), N(299))));
         // Still armed: a real disappearance afterwards fires.
-        Assert.Equal([2], Feed(d, N(299), Gone, Gone));
+        Assert.Equal([11], Feed(d, Seq(N(299), Times(Gone, 12))));
+    }
+
+    [Fact]
+    public void Tooltip_text_restarts_the_wait_and_alone_makes_the_row_unreadable()
+    {
+        var readings = new HudReadings();
+        var d = NewDetector(readings);
+        // 297, tooltip for 5 s, panel back: nothing, the number again.
+        Assert.Empty(Feed(d, Seq(N(297), N(297), Times(Tip, 5))));
+        Assert.Equal(RowReading.Unknown, readings.Get(AlertIds.Kill300).Text);
+        Assert.Empty(Feed(d, N(297)));
+        Assert.Equal("297", readings.Get(AlertIds.Kill300).Text);
+        // 8 s absent, tooltip 3 s, 8 s absent: the wait restarted, no alert yet; 2 s more and it fires.
+        Assert.Empty(Feed(d, Seq(Times(Gone, 8), Times(Tip, 3), Times(Gone, 8))));
+        Assert.Equal("297", readings.Get(AlertIds.Kill300).Text);   // pending: the last number, not "?"
+        Assert.Equal([2], Feed(d, Times(Gone, 3)));
+        // Once done, a tooltip over the empty spot changes nothing.
+        Assert.Empty(Feed(d, Times(Tip, 15)));
+        Assert.Equal(KillDetector.DoneText, readings.Get(AlertIds.Kill300).Text);
     }
 
     [Fact]
@@ -167,7 +224,7 @@ public class KillTests(ITestOutputHelper output)
         var d = NewDetector();
         // 120 -> "300" once -> 121: the 300 does not continue the count, so it is ignored;
         // and a lone high value followed by "gone" does not count as "last value >= 295".
-        Assert.Empty(Feed(d, N(120), N(120), N(300), N(121), N(121), N(299), Gone, Gone, Gone));
+        Assert.Empty(Feed(d, Seq(N(120), N(120), N(300), N(121), N(121), N(299), Times(Gone, 15))));
     }
 
     [Fact]
@@ -175,10 +232,11 @@ public class KillTests(ITestOutputHelper output)
     {
         var readings = new HudReadings();
         var d = NewDetector(readings);
-        Assert.Equal([3], Feed(d, N(299), N(299), Gone, Gone));
+        Assert.Equal([12], Feed(d, Seq(N(299), N(299), Times(Gone, 11))));
         // Back at 296..299 (not "low"): not re-armed, nothing fires.
-        Assert.Empty(Feed(d, N(296), N(296), N(297), Gone, Gone, Gone));
-        // New round from 0: re-armed, the next 300 fires again.
+        Assert.Empty(Feed(d, Seq(N(296), N(296), N(297), Times(Gone, 15))));
+        Assert.Equal(KillDetector.DoneText, readings.Get(AlertIds.Kill300).Text);
+        // New card from 0: re-armed, the next 300 fires again.
         Assert.Empty(Feed(d, N(0), N(0), N(1), N(5), N(17)));
         Assert.Equal("17", readings.Get(AlertIds.Kill300).Text);
         Assert.Equal([3], Feed(d, N(297), N(299), N(299), N(300)));
@@ -190,20 +248,21 @@ public class KillTests(ITestOutputHelper output)
         var readings = new HudReadings();
         var d = NewDetector(readings);
         // Changing every poll (never two equal readings) up to 299, then gone.
-        Assert.Equal([8], Feed(d, N(280), N(283), N(286), N(290), N(293), N(296), N(299), Gone, Gone));
-        var d2 = NewDetector(readings);
-        d2.Update(N(41));
-        Assert.Equal(new RowReading("41", false), readings.Get(AlertIds.Kill300));
-        d2.Update(Bad); d2.Update(Bad);
-        Assert.Equal("41", readings.Get(AlertIds.Kill300).Text);
-        d2.Update(Bad);
-        Assert.Equal(RowReading.Unknown, readings.Get(AlertIds.Kill300).Text);
+        Assert.Equal([17], Feed(d, Seq(N(280), N(283), N(286), N(290), N(293), N(296), N(299), Times(Gone, 12))));
+        var r2 = new HudReadings();
+        var d2 = NewDetector(r2);
+        Feed(d2, N(41), N(41));
+        Assert.Equal(new RowReading("41", false), r2.Get(AlertIds.Kill300));
+        Feed(d2, Bad, Bad, Bad);
+        Assert.Equal("41", r2.Get(AlertIds.Kill300).Text);          // unreadable digits: no "?"
+        Feed(d2, Tip);
+        Assert.Equal(RowReading.Unknown, r2.Get(AlertIds.Kill300).Text);
         d2.Reset();
-        Assert.Equal(RowReading.None, readings.Get(AlertIds.Kill300).Text);
+        Assert.Equal(RowReading.None, r2.Get(AlertIds.Kill300).Text);
     }
 
     [Fact]
-    public void Real_299_frames_then_a_frame_without_the_panel_fire_with_the_Thai_text_and_panel_crop()
+    public void Real_299_frames_then_frames_without_the_panel_fire_after_10_s_with_the_Thai_text_and_panel_crop()
     {
         var d = NewDetector();
         var events = new List<WatchEvent>();
@@ -214,9 +273,9 @@ public class KillTests(ITestOutputHelper output)
         d.Process(f298, HudScale.One, t, events);
         d.Process(f299, HudScale.One, t.AddSeconds(1), events);
         d.Process(f299, HudScale.One, t.AddSeconds(2), events);
-        d.Process(noPanel, HudScale.One, t.AddSeconds(3), events);
+        for (int i = 3; i < 13; i++) d.Process(noPanel, HudScale.One, t.AddSeconds(i), events);
         Assert.Empty(events);
-        d.Process(noPanel, HudScale.One, t.AddSeconds(4), events);
+        d.Process(noPanel, HudScale.One, t.AddSeconds(13), events);
         var e = Assert.Single(events);
         Assert.Equal("ภารกิจสำเร็จ! ยิงครบ 300 ตัว (เลขล่าสุดที่เห็น 299)", e.Message);
         Assert.Equal(AlertIds.Kill300, e.AlertId);
@@ -224,6 +283,25 @@ public class KillTests(ITestOutputHelper output)
         var m = new AlertComposer(TestData.Config).Compose(e, noPanel, HudScale.One);
         using var img = new Bitmap(new MemoryStream(m.Png!));
         Assert.Equal(new Size(180, 40), img.Size);
+    }
+
+    [Theory]
+    [InlineData("174618_682_kill_heartbeat.png")]   // bright sky
+    [InlineData("174624_682_kill_change.png")]      // dark foliage (76 % near-black)
+    [InlineData("174627_690_kill_change.png")]      // sea
+    public void True_gone_crops_after_298_still_fire_after_10_s(string gone)
+    {
+        var d = NewDetector();
+        var events = new List<WatchEvent>();
+        var t = new DateTime(2026, 11, 18, 20, 0, 0);
+        var f298 = Kill298.Load();
+        var noPanel = RegionFrame(Path.Combine(LabelledDir("kill"), gone), "kill");
+        d.Process(f298, HudScale.One, t, events);
+        d.Process(f298, HudScale.One, t.AddSeconds(1), events);
+        for (int i = 2; i < 12; i++) d.Process(noPanel, HudScale.One, t.AddSeconds(i), events);
+        Assert.Empty(events);
+        d.Process(noPanel, HudScale.One, t.AddSeconds(12), events);
+        Assert.Equal("ภารกิจสำเร็จ! ยิงครบ 300 ตัว (เลขล่าสุดที่เห็น 298)", Assert.Single(events).Message);
     }
 
     /// <summary>BGR of a crop (alpha ignored), from a frame or a decoded PNG.</summary>
@@ -267,8 +345,7 @@ public class KillTests(ITestOutputHelper output)
         var noPanel = Dead1024.Load();
         d.Process(f298, HudScale.One, t, events);
         d.Process(f299, HudScale.One, t.AddSeconds(1), events);
-        d.Process(noPanel, HudScale.One, t.AddSeconds(2), events);
-        d.Process(noPanel, HudScale.One, t.AddSeconds(3), events);
+        for (int i = 2; i <= 12; i++) d.Process(noPanel, HudScale.One, t.AddSeconds(i), events);
         var e = Assert.Single(events);
 
         var region = new Rectangle(1024 - 180, 326, 180, 40);

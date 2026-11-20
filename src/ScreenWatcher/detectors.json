@@ -277,7 +277,14 @@
     "rearmBelow": 295,
     "maxStepPerPoll": 12,
     "field": { "anchor": "topRight", "cellX": [ -129, -110, -91 ], "y": 333, "glyphs": "kill", "inks": [ "kill" ],
-               "searchPx": 2, "minScore": 0.6, "minMargin": 0.03, "allowBlank": true, "blankInk": 6 }
+               "searchPx": 2, "minScore": 0.6, "minMargin": 0.03, "allowBlank": true, "blankInk": 6 },
+    // The panel shows only while an EXP card is in use and stays away after 300 until the next
+    // card (owner, 2026-11-20). Done alert: last confirmed value >= nearTarget, then no panel for
+    // absentSeconds in a row (a blank, dark or unreadable field = no panel). Tooltip text over the
+    // field (coverTextMin pixels of light grey coverText per channel next to an outline at most
+    // coverOutlineMax; the 12:52 tooltip text is exactly (222,222,222) on (0,0,0)) restarts the
+    // wait and is the only thing that makes the row unreadable ("?").
+    "absentSeconds": 10, "coverText": [ 215, 229 ], "coverTextMin": 6, "coverOutlineMax": 25
   },
 
   "expCard": {
@@ -370,6 +377,13 @@
     },
     // Slot frame blue (5..7, 93..99, 168..178); a selected slot's frame is orange instead.
     "frameMaxR": 40, "frameG": [ 70, 125 ], "frameB": [ 140, 200 ], "frameMinRun": 12, "frameMinRuns": 5,
+    // A watched item counts as gone only when the slot it was last seen in POSITIVELY looks empty
+    // (or holds another identified item). Empty slot (town_items.png slots 5..6 and the 2026-11-20
+    // 12:52 frame slot 6, measured): all four 1-px frame edges fully frame blue, interior dark
+    // navy ~(0..13, 10..36, 15..57). The 12:52 hover tooltip ("Mini Stealth Card (75 ชิ้น)") hides
+    // the top edge of slots 1..5 (dims it to ~(2,34,61)) and its body is black: not empty, so the
+    // potion rows were unreadable there, not "หมด". A selected slot's orange frame is never "empty".
+    "emptyFrameMinShare": 0.9, "emptyMaxChannel": 70, "emptyMinBlueOverRed": 4, "emptyNavyMinShare": 0.9,
     "items": [
       { "id": "ammoBox", "name": "กล่องเติมกระสุน", "unit": "กล่อง", "defaultThreshold": 5, "icons": [ "ammoBox" ],
         "lowMessage": "{0}เหลือ {1} {2} เตรียมเติมเสบียง", "goneMessage": "{0}หมดคลัง!" },

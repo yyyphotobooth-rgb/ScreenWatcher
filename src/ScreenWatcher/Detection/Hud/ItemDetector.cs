@@ -9,8 +9,13 @@ namespace ScreenWatcher.Detection.Hud;
 /// Item rows (ammo box, fuel bottles, monster card, the three potions). Per item:
 /// - "เหลือ N": the count read on StablePolls polls in a row is at or below the row threshold.
 ///   Fires once; re-arms when a stable count is above the threshold again.
-/// - "หมด": the icon was seen earlier (with a readable count) and is now missing for GoneStablePolls polls while the bar
-///   itself is visible. Fires once; re-arms when the icon is seen again.
+/// - "หมด": the icon was seen earlier (with a readable count) and its slot now POSITIVELY shows an
+///   empty slot (or another item) on GoneStablePolls polls in a row while the bar is visible.
+///   Fires once; re-arms when the icon is seen again. A slot with anything else over it (tooltip,
+///   window, cursor, unknown pixels) is unreadable for the row: the last value and the alert state
+///   are kept, the run towards "หมด" starts again, and after StableValue.UnknownAfter such polls the
+///   row shows "?" (the "อ่านค่าไม่ได้" rule picks it up). Field trial 2026-11-20 12:52: a hover
+///   tooltip over the potion slots gave three false "หมด".
 /// Potions: when two icons of one type are on the bar (the same two slots on StablePolls polls in
 /// a row), their slots are remembered and only the side chosen in the row (left by default) is
 /// watched. If that one runs out (its slot empties) the row does not move to the other icon by
@@ -25,7 +30,8 @@ public sealed class ItemDetector : IHudDetector, IArmedState
         public readonly string GoneKey = def.Id + ":gone";
         public readonly StableValue<int> Count = new(stablePolls);
         public bool Seen, ArmedLow = true, GoneFired;
-        public int PresentRun, AbsentRun, HiddenRun;
+        public int PresentRun, AbsentRun, HiddenRun, UnclearRun;
+        public int? LastSlot;   // slot the watched icon was last seen in
         public int? SlotLeft, SlotRight;
         public int PairLeft, PairRight, PairRun;
     }
@@ -110,7 +116,8 @@ public sealed class ItemDetector : IHudDetector, IArmedState
 
             if (watched is { } w)
             {
-                st.AbsentRun = st.HiddenRun = 0;
+                st.AbsentRun = st.HiddenRun = st.UnclearRun = 0;
+                st.LastSlot = w.Slot;
                 st.PresentRun++;
                 if (st.Count.Push(w.Count))
                 {
@@ -131,11 +138,17 @@ public sealed class ItemDetector : IHudDetector, IArmedState
             else if (def.Mark is not null && r.UncertainKits.Count > 0)
             {
                 // A kit on the bar could not be told apart on this frame (covered by the cursor):
-                // it may be this one, so this poll says nothing about the potion. Hold.
+                // it may be this one, so this poll says nothing about the potion.
+                Unclear(st, two);
+            }
+            else if (r.BarVisible && !PositivelyAbsent(st, r, two ? (_options.WatchRight(def.Id) ? st.SlotRight : st.SlotLeft) : st.LastSlot))
+            {
+                // Its slot is covered (tooltip, window, cursor) or shows unknown pixels: no news.
+                Unclear(st, two);
             }
             else if (r.BarVisible)
             {
-                st.PresentRun = st.HiddenRun = 0;
+                st.PresentRun = st.HiddenRun = st.UnclearRun = 0;
                 st.Count.Reset();
                 if (++st.AbsentRun >= _c.GoneStablePolls)
                 {
@@ -150,11 +163,30 @@ public sealed class ItemDetector : IHudDetector, IArmedState
             else
             {
                 // Bar not on screen: nothing can be said about the item.
-                st.PresentRun = st.AbsentRun = 0;
+                st.PresentRun = st.AbsentRun = st.UnclearRun = 0;
                 st.Count.Reset();
                 if (++st.HiddenRun >= StableValue<int>.UnknownAfter) _readings.Set(def.Id, RowReading.None, false, two);
             }
         }
+    }
+
+    /// <summary>This poll positively shows the item is not on the bar: never seen (nothing to lose),
+    /// or the slot it was last seen in is a real empty slot or holds another identified item.</summary>
+    static bool PositivelyAbsent(State st, ItemBarReading r, int? slot)
+    {
+        if (!st.Seen || slot is not { } k) return true;
+        if (r.EmptySlots.Contains(k)) return true;
+        foreach (var f in r.Found) if (f.Slot == k && f.ItemId != st.Def.Id) return true;
+        return false;
+    }
+
+    /// <summary>A poll that says nothing about the item: keep the last value and the alert state,
+    /// break the runs; after UnknownAfter such polls the row shows "?".</summary>
+    void Unclear(State st, bool two)
+    {
+        st.PresentRun = st.AbsentRun = st.HiddenRun = 0;
+        st.Count.Push(null);
+        if (++st.UnclearRun >= StableValue<int>.UnknownAfter) _readings.Set(st.Def.Id, RowReading.Unknown, false, two);
     }
 
     /// <summary>Thai words follow each other without a space, but a name ending in Latin letters
@@ -175,7 +207,7 @@ public sealed class ItemDetector : IHudDetector, IArmedState
         foreach (var st in _states)
         {
             st.Count.Reset();
-            st.PresentRun = st.AbsentRun = st.HiddenRun = st.PairRun = 0;
+            st.PresentRun = st.AbsentRun = st.HiddenRun = st.PairRun = st.UnclearRun = 0;
             _readings.Set(st.Def.Id, RowReading.None, false, st.SlotLeft is not null);
         }
     }

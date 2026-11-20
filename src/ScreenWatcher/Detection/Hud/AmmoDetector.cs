@@ -7,6 +7,8 @@ namespace ScreenWatcher.Detection.Hud;
 /// <summary>
 /// Machine-gun and missile counters. A counter is empty when it reads 00000 by digit shape on
 /// StablePolls consecutive polls; the alert fires once and re-arms when the counter reads above 0.
+/// Only a positive read counts: 00000 must be the game's red "empty" digits (blue 0s, or anything
+/// drawn over the counter, are unreadable); the last value and alert state are kept meanwhile.
 /// </summary>
 public sealed class AmmoDetector : IHudDetector, IArmedState
 {
@@ -44,10 +46,14 @@ public sealed class AmmoDetector : IHudDetector, IArmedState
         foreach (var c in _counters)
         {
             var r = c.Reader.Read(frame, scale);
-            if (Update(c, r.Ok ? r.Value : null))
+            if (Update(c, Positive(r)))
                 events.Add(new WatchEvent(WatchEventKind.Hud, c.Config.Message, now, c.Id, _crop.Locate(frame.Width, frame.Height, scale)));
         }
     }
+
+    /// <summary>The value a reading stands for, or null when it is not a positive read (unreadable,
+    /// or a 0 not drawn in the red empty colours).</summary>
+    public static int? Positive(DigitReading r) => r.Ok && (r.Value != 0 || r.Red) ? r.Value : null;
 
     /// <summary>Logic only (tests): one poll for a counter (0 = gun, 1 = missile; null =
     /// unreadable). Returns true when the "empty" alert fires.</summary>

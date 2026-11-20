@@ -52,6 +52,10 @@ public sealed class ItemBarReading
     /// e.g. the game's own mouse cursor, covers the box or its mark). Nothing may be concluded
     /// about a missing potion from such a frame.</summary>
     public List<int> UncertainKits { get; } = [];
+    /// <summary>Slots that positively look like an empty slot (whole frame visible, dark navy
+    /// interior). Only these (or another item in its slot) let an item count as gone; anything
+    /// else drawn over a slot (tooltip, window, cursor) says nothing about what is under it.</summary>
+    public List<int> EmptySlots { get; } = [];
 }
 
 /// <summary>
@@ -107,6 +111,7 @@ public sealed class ItemBarReader
     {
         result.Found.Clear();
         result.UncertainKits.Clear();
+        result.EmptySlots.Clear();
         var s = HudLayout.Snap(scale);
         bool exact = s.X == 1 && s.Y == 1;
         double cx = frame.Width / 2.0;
@@ -136,6 +141,7 @@ public sealed class ItemBarReader
                 // Kit-like but too far off: a kit with something drawn over it (no other slot
                 // content comes this close to the kit pictures).
                 if (def.Mark is not null && bestD <= _c.KitUncertainDistance) result.UncertainKits.Add(k);
+                else if (IsEmptySlot(frame, left, top, s, exact, search)) result.EmptySlots.Add(k);
                 continue;
             }
             if (def.Mark is not null)
@@ -150,6 +156,49 @@ public sealed class ItemBarReader
             result.Found.Add(new FoundItem(def.Id, k, ReadCount(frame, right, bestY, s)));
         }
         result.BarVisible = result.Found.Count > 0 || SlotFramesVisible(frame, s);
+    }
+
+    /// <summary>The slot whose interior starts at (left, top) looks like a real empty slot: its whole
+    /// frame is visible (a tooltip or window over the bar hides at least one edge) and its interior
+    /// is the empty slot's dark navy (not black like a tooltip body, not an icon).</summary>
+    bool IsEmptySlot(Frame f, double left, double top, HudScale s, bool exact, int search)
+    {
+        double fx0 = left - s.X, fy0 = top - s.Y, fx1 = left + 28 * s.X, fy1 = top + 28 * s.Y;   // frame lines (1.0: 1 px each)
+        if (!EdgeVisible(f, fx0, fy0, fx1, horizontal: true, search) || !EdgeVisible(f, fx0, fy1, fx1, horizontal: true, search)
+            || !EdgeVisible(f, fy0, fx0, fy1, horizontal: false, search) || !EdgeVisible(f, fy0, fx1, fy1, horizontal: false, search))
+            return false;
+        if (!SampleCells(f, Math.Round(left), Math.Round(top), s, exact)) return false;
+        int navy = 0;
+        for (int c = 0; c < _cellUsed.Length; c++)
+        {
+            if (!_cellUsed[c]) continue;
+            int o = c * 3, r = _cell[o], g = _cell[o + 1], b = _cell[o + 2];
+            if (r <= _c.EmptyMaxChannel && g <= _c.EmptyMaxChannel && b <= _c.EmptyMaxChannel && b - r >= _c.EmptyMinBlueOverRed) navy++;
+        }
+        return navy >= _cellsUsed * _c.EmptyNavyMinShare;
+    }
+
+    /// <summary>One frame edge from a to b (native) at cross position at (+-search): the best line
+    /// shows frame blue on at least EmptyFrameMinShare of the inner part (corners left out).</summary>
+    bool EdgeVisible(Frame f, double a, double at, double b, bool horizontal, int search)
+    {
+        var px = f.Pixels;
+        int from = (int)Math.Round(a) + 2, to = (int)Math.Round(b) - 2, c0 = (int)Math.Round(at);
+        int len = to - from + 1;
+        if (len <= 0) return false;
+        for (int d = -search; d <= search; d++)
+        {
+            int c = c0 + d, blue = 0;
+            if (c < 0 || c >= (horizontal ? f.Height : f.Width) || from < 0 || to >= (horizontal ? f.Width : f.Height)) continue;
+            for (int t = from; t <= to; t++)
+            {
+                int i = horizontal ? (c * f.Width + t) * 4 : (t * f.Width + c) * 4;
+                int bb = px[i], g = px[i + 1], r = px[i + 2];
+                if (r <= _c.FrameMaxR && g >= _c.FrameG[0] && g <= _c.FrameG[1] && bb >= _c.FrameB[0] && bb <= _c.FrameB[1]) blue++;
+            }
+            if (blue >= len * _c.EmptyFrameMinShare) return true;
+        }
+        return false;
     }
 
     /// <summary>Mean colour of each 2x2 block (1.0 layout) of the interior at native (x, y).</summary>

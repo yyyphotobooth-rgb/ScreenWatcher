@@ -12,7 +12,8 @@ Discord bot (Discord.Net, runs inside the app).
   never work around it.
 - Keep CPU and RAM minimal (1 poll/second, reuse buffers, no per-tick allocations of frames).
 - Test only what a task touches. No full build matrix, no publish.
-- Never push, release, or delete anything without the owner's explicit word.
+- Never release or delete anything without the owner's explicit word. Pushing to origin main
+  follows the GitHub upload rule below.
 
 ## Layout
 - `src/ScreenWatcher/detectors.json`: every detector threshold and region (single source of truth;
@@ -31,6 +32,11 @@ Discord bot (Discord.Net, runs inside the app).
   row's "รีเซ็ต" button or Discord /reset). EXP card (`ExpCardDetector.cs`): blue emblem searched
   along the whole top buff bar (template in detectors.json `expCard`), "บัตร exp ครบ 30 นาที" after
   10 s absent; second line of the kill row with its own checkbox; not in the unreadable rule.
+  Occlusion rule (all HUD rows): "empty/low" only on a positive read (digits read confidently, an
+  item slot that positively looks empty, 00000 in the red digits); anything drawn over a part
+  (tooltip, window, cursor) is unreadable and keeps the last value. Kill counter: the panel exists
+  only while an EXP card is in use; done = last value >= 295 then no panel for 10 s; row shows
+  "ครบแล้ว" / "ไม่มี"; only tooltip text over it makes it unreadable.
 - `src/ScreenWatcher/Collection`: optional "Collect data" mode (HUD crops + full frames saved to
   %LOCALAPPDATA%\ScreenWatcher\collect, size-capped; writes on a background thread).
 - `src/ScreenWatcher/Diagnostics`: field-trial diagnostics, all under %LOCALAPPDATA%\ScreenWatcher:
@@ -69,8 +75,9 @@ Discord bot (Discord.Net, runs inside the app).
   set `SCREENWATCHER_DATA` to an empty folder (replaces %LOCALAPPDATA%\ScreenWatcher).
 
 ## GitHub upload rule
-- After every finished and committed change, ASK: "Upload to GitHub now? (yes / no / release)". Never push without that answer in the same chat.
-- yes = `git push origin main` (code backup only).
+- After every finished, committed change whose touched tests pass: push to origin main
+  automatically (`git push origin main`, code backup only), without asking.
+- Before every push, list the files changed since origin/main and stop and report (do not push) if
+  one is over 50 MB, matches the exclusions below, or contains a token, key or other secret.
 - release = only if the owner typed "release": create GitHub release vX.Y.Z from the csproj version with the signed dist exe; requires a prior test by the owner. Attach BOTH `ScreenWatcher.exe` and `ScreenWatcher.exe.sig` (exact names; the in-app updater ignores a release without both).
 - Never push tokens, signing keys, samples/, dist/, bin/, obj/. Never force-push, delete branches, or delete releases.
-- Before any push, list files changed since origin/main and stop if one is over 50 MB or matches the exclusions.

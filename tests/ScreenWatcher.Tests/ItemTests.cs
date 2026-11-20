@@ -36,6 +36,10 @@ public class ItemTests(ITestOutputHelper output)
     {
         var r = new ItemBarReading { BarVisible = visible };
         foreach (var (id, slot, count) in items.OrderBy(i => i.Slot)) r.Found.Add(new FoundItem(id, slot, count));
+        // A visible bar here is a true bar: every slot without a found item positively looks empty.
+        if (visible)
+            for (int k = 0; k < Cfg.Slots; k++)
+                if (!r.Found.Any(f => f.Slot == k)) r.EmptySlots.Add(k);
         return r;
     }
 

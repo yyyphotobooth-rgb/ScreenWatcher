@@ -11,7 +11,8 @@ namespace ScreenWatcher.Detection.Hud;
 /// "?" for longer than N seconds while frames arrive. Item rows also count while the whole item bar
 /// is not seen (a covered bar and a bar that is not drawn look the same).
 /// Not counted: an item not on the bar or run out ("หมด"; the row must show a value again first),
-/// a kill panel that is not shown ("—"), a row switched off, frames stopping (pause, minimised,
+/// a kill panel that is not shown ("—", "ไม่มี", "ครบแล้ว"; the kill row shows "?" only while tooltip
+/// text covers it), a row switched off, frames stopping (pause, minimised,
 /// game lost: the run starts again), and the game window being lost (ends the session).
 /// The first row over the limit opens a CombineSeconds window; every row crossing in it joins one
 /// message, sent at the window's end with the full client frame. Fires once per row; a row re-arms
@@ -149,6 +150,7 @@ public sealed class UnreadableDetector
         string text = _readings.Get(r.Id).Text;
         if (text == RowReading.Unknown) return Sight.Unreadable;
         if (text == ItemDetector.GoneText) return Sight.NotShown;
+        if (text is KillDetector.DoneText or KillDetector.NoPanelText) return Sight.NotShown;   // kill panel not there (no card / done)
         if (RowStats.TryValue(text, out _)) return Sight.Value;
         if (r.Id == AlertIds.InventoryFull && text != RowReading.None) return Sight.Value;   // ปกติ / เต็ม: the box was read
         if (r.Item && text == RowReading.None)
