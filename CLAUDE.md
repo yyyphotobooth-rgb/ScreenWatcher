@@ -46,6 +46,11 @@ Discord bot (Discord.Net, runs inside the app).
   the blue corner at 1.0; length from the track's dark top border); fill red/orange/yellow, else empty;
   HP never rises, a drop counts after 2 consecutive polls; one alert per pillar per level 75/50/25
   ("เสาวอเลือดเหลือ X%!", same checkbox and crop); row "00:15 (80%) · 00:42 (100%)", "+N" when long.
+  Flash (1.2.2): while attacked the whole icon box flashes red/pink <-> blue (blends too); a non-blue
+  box counts by geometry (light outline, darker line) plus a pixel-exact timer or the HP track (border
+  row darker than the row under the bar). Timer fallback when icon art touches the band: each glyph
+  matched in its own box (ink + 4-neighbour halo, hollows ignored). Pillars and a pending HP drop
+  survive polls without the panel; the row keeps its value for missingGraceSeconds (5).
 - `src/ScreenWatcher/Collection`: optional "Collect data" mode (HUD crops + full frames saved to
   %LOCALAPPDATA%\ScreenWatcher\collect, size-capped; writes on a background thread).
 - `src/ScreenWatcher/Diagnostics`: field-trial diagnostics, all under %LOCALAPPDATA%\ScreenWatcher:

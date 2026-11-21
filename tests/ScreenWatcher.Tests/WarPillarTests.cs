@@ -168,6 +168,8 @@ public sealed class WarPillarTests
         r.Poll(2, 125);
         Assert.Equal("02:05 (100%)", r.Text);
         r.Poll(3);
+        Assert.Equal("02:05 (100%)", r.Text);   // gone for less than missingGraceSeconds: kept
+        r.Poll(2 + C.WarPillar.MissingGraceSeconds);
         Assert.Equal("ไม่มี", r.Text);
         Assert.Empty(r.Events);
     }
@@ -439,6 +441,128 @@ public sealed class WarPillarTests
         Assert.False(Diagnostics.RowStats.TryValue("?", out _));
     }
 
+    // ------------------------------------------------------------------ flashing box (1.2.2)
+
+    // 2026-11-21 14:30, 60 native WGC frames, 1 s apart (client = whole 1024x768 image). The
+    // pillar's new icon has white art reaching into the timer band. 3 frames are black (no panel)
+    // and in 8 a game window ("GM") lies over the bottom of the icon box (timer and bar cut).
+    static readonly string LiveDir = Path.Combine(TestData.SamplesDir, "live-2026-11-21");
+    static readonly HashSet<int> LiveBlack = [32, 33, 34];
+    static readonly HashSet<int> LiveWindowOver = [28, 29, 30, 31, 35, 36, 37, 38];
+
+    static IEnumerable<(int Index, Frame Frame)> LiveFrames() =>
+        Directory.GetFiles(LiveDir, "live_*.png").OrderBy(f => f, StringComparer.Ordinal).Select((f, i) =>
+            (i, TestData.ClientFrame(Path.Combine("live-2026-11-21", Path.GetFileName(f)), 0, 0, 1024, 768)));
+
+    [Fact]
+    public void Live_frames_with_a_visible_panel_are_found_and_read()
+    {
+        int read = 0;
+        foreach (var (i, f) in LiveFrames())
+        {
+            var list = Find(f);
+            if (LiveBlack.Contains(i)) { Assert.Empty(list); continue; }
+            var p = Assert.Single(list);
+            Assert.Equal(new Point(CornerX - 1, CornerY - 1), p.Box.Location);
+            if (LiveWindowOver.Contains(i))
+            {
+                Assert.Equal(-1, p.Minutes);   // cut by the window: unreadable, the row keeps its value
+                continue;
+            }
+            Assert.InRange(p.Minutes, 36, 37);
+            Assert.InRange(p.Hp, 11, 17);
+            read++;
+        }
+        Assert.Equal(49, read);
+    }
+
+    [Fact]
+    public void Red_flash_samples_are_found_and_read()
+    {
+        // warpillar_redframe_1426.png: the whole icon box flashed red while attacked, 00:41. Its bar:
+        // track columns 262..296 (35), fill 262..275 full and 276 half lit = 14.5/35; the reader
+        // counts full columns: 40 %.
+        var red = TestData.ClientFrame(Path.Combine("from-chat", "warpillar_redframe_1426.png"), 0, 0, 1024, 768);
+        var p = Assert.Single(Find(red));
+        Assert.Equal(41, p.Minutes);
+        Assert.Equal(40, p.Hp);
+        Assert.Equal(new Point(CornerX - 1, CornerY - 1), p.Box.Location);
+        // The 2026-11-19 PrintWindow frames (1600x1024) caught another red flash at 00:41.
+        foreach (var file in new[] { "live_printwindow.png", "live2_printwindow.png", "live3_printwindow.png" })
+        {
+            var q = Assert.Single(Find(TestData.ClientFrame(file, 0, 0, 1600, 1024)));
+            Assert.Equal(41, q.Minutes);
+            Assert.InRange(q.Hp, 80, 90);
+        }
+    }
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(0.5)]
+    [InlineData(0.25)]
+    public void Flashed_and_blended_boxes_are_read_like_blue_ones(double flash)
+    {
+        var f = new PanelFrames().Stacked(new PanelFrames.P(15, 60, Flash: flash), new(42, 100), new(70, 24, Flash: flash));
+        var list = Find(f);
+        Assert.Equal([15, 42, 70], list.Select(p => p.Minutes));
+        Assert.Equal([PanelFrames.ReadBack(60), 100, PanelFrames.ReadBack(24)], list.Select(p => p.Hp));
+    }
+
+    [Fact]
+    public void Live_sequence_gives_one_time_alert_and_one_hp_alert()
+    {
+        // Threshold 36 min: the timer goes 37 -> 36 once; HP 17..11 is first seen below 25 (one
+        // alert for 25). Black and window-covered frames never reset the row or the pillar.
+        var r = new Run(36);
+        int s = 0;
+        foreach (var (i, f) in LiveFrames())
+        {
+            r.Poll(s++, f);
+            if (i > 0) Assert.Matches(@"^00:3[67] \(\d+%\)$", r.Text);
+        }
+        Assert.Equal(["เสาวอเลือดเหลือ 25%!", "เสาวอเหลือ 36 นาที!"], r.Events.Select(e => e.Message).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Flashing_sequence_gives_one_time_alert_and_one_alert_per_hp_level()
+    {
+        // One pillar, 12 -> 9 min, HP 80 -> 60 -> 40, polled every second: the box flashes blue /
+        // red / blend in turn and every 7th poll has no panel at all (a flash frame lost).
+        var r = new Run(10);
+        var cache = new Dictionary<(int, int, double), Frame>();
+        for (int s = 0; s < 200; s++)
+        {
+            int minutes = 12 - s / 60, hp = s < 40 ? 80 : s < 80 ? 60 : 40;
+            double flash = (s % 3) switch { 0 => 0, 1 => 1, _ => 0.5 };
+            if (s % 7 == 6) { r.Poll(s); }
+            else
+            {
+                var key = (minutes, hp, flash);
+                if (!cache.TryGetValue(key, out var f)) cache[key] = f = r.Frames.Frame(new PanelFrames.P(minutes, hp, Flash: flash));
+                r.Poll(s, f);
+            }
+            if (s > 0) Assert.StartsWith($"00:", r.Text);
+        }
+        Assert.Equal(["เสาวอเลือดเหลือ 50%!", "เสาวอเลือดเหลือ 75%!", "เสาวอเหลือ 10 นาที!"],
+            r.Events.Select(e => e.Message).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void A_pending_hp_drop_survives_a_poll_without_the_pillar()
+    {
+        var t = new WarPillarTracker(2, 2, [75, 50, 25]);
+        var fire = new List<WarPillarTracker.Alert>();
+        int s = 0;
+        void Poll(int hp = -2) =>   // -2: the pillar not seen this poll
+            t.Update(hp == -2 ? [] : [new WarPillarTracker.Reading(60, hp)], T0.AddSeconds(s++), 10, fire, null);
+        Poll(100); Poll(100);
+        Poll(40); Poll(); Poll(40);                      // flash frame between the two readings
+        var a = Assert.Single(fire);
+        Assert.Equal(50, a.HpLevel);
+        Poll(); Poll(40); Poll(40);
+        Assert.Single(fire);                             // no re-alert after the gaps
+    }
+
     // ------------------------------------------------------------------ HP bar
 
     [Fact]
@@ -696,7 +820,7 @@ public sealed class PanelFrames
 
     /// <summary>One panel: timer, HP % (the sample's full bar cut to it), fill colour and empty-track
     /// colour.</summary>
-    public readonly record struct P(int Minutes, int Hp = 100, BarFill Fill = BarFill.Red, BarEmpty Empty = BarEmpty.Grey);
+    public readonly record struct P(int Minutes, int Hp = 100, BarFill Fill = BarFill.Red, BarEmpty Empty = BarEmpty.Grey, double Flash = 0);
 
     public enum BarFill { Red, Orange, Yellow }
     public enum BarEmpty { Grey, DarkRed }
@@ -728,6 +852,7 @@ public sealed class PanelFrames
             var (cx, cy) = corner(i);
             WriteTimer(bmp, cx, cy, panels[i].Minutes);
             CutBar(bmp, cx, cy, panels[i]);
+            if (panels[i].Flash > 0) Flash(bmp, cx, cy, panels[i].Flash);
         }
         return Imaging.Frame.FromBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
     }
@@ -748,6 +873,22 @@ public sealed class PanelFrames
                     bmp.SetPixel(x, y, Color.FromArgb(c.R, c.R * 55 / 100, c.B / 4));
                 else if (p.Fill == BarFill.Yellow)
                     bmp.SetPixel(x, y, Color.FromArgb(c.R, c.R * 95 / 100, c.B / 4));
+            }
+    }
+
+    /// <summary>The game's red/pink flash while the pillar is attacked (warpillar_redframe_1426.png),
+    /// a = 1 fully red, 0.5 a mid-flash blend: every pixel of the icon box pushed to red (R -> 255,
+    /// B down) except the white timer ink and outline (min channel >= 200) and the bar's fill/empty
+    /// columns, which the game leaves as they are.</summary>
+    static void Flash(Bitmap bmp, int cx, int cy, double a)
+    {
+        for (int y = cy - 1; y <= cy + 49; y++)
+            for (int x = cx - 1; x <= cx + 45; x++)
+            {
+                if (y >= cy + 43 && y <= cy + 47 && x >= cx + 8 && x <= cx + 42) continue;
+                var c = bmp.GetPixel(x, y);
+                if (Math.Min(c.R, Math.Min(c.G, c.B)) >= 200) continue;
+                bmp.SetPixel(x, y, Color.FromArgb((int)(c.R + (255 - c.R) * a), c.G, (int)(c.B * (1 - 0.35 * a))));
             }
     }
 

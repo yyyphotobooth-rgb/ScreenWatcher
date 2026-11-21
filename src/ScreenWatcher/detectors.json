@@ -379,7 +379,23 @@
     // Anything else is empty track.
     "fillMinRed": 110, "fillMinRedOverBlue": 60, "fillMaxGreenOverRed": 10,
     // Matching pillars: a reading more than this many % above a pillar's HP is a worse match (HP never rises).
-    "hpRiseTolerance": 3
+    "hpRiseTolerance": 3,
+    // Under attack the game FLASHES the whole icon box red/pink <-> blue (2026-11-21,
+    // samples/from-chat/warpillar_redframe_1426.png and samples/live-2026-11-21): the blue line turns
+    // (255,100,116)..(255,48,18), the bar's dark border (255,68,40)-like and its light row pink
+    // (255,185,203); the fill and the black empty track stay. A box whose line is not blue is taken
+    // from its geometry: the light outline (outlineMinLum) with the line inside it at least
+    // lineMinContrast darker (luminance), on frameMinShare of the left column and top row, AND
+    // confirmed by a pixel-exact timer or the HP track (border row at least barMinContrast darker
+    // than the row under the bar, over the expected length). Blue boxes need no confirmation.
+    "lineMinContrast": 40, "barMinContrast": 50,
+    // Timer fallback when ink-column cutting fails (the 2026-11-21 pillar icon has white art reaching
+    // into the timer band): each Tahoma glyph is matched pixel-exactly inside its own box, ink
+    // outside the boxes ignored; glyphs of the H..H:MM at most timerMaxGap columns apart (1.0).
+    "timerMaxGap": 8,
+    // A panel that was showing and is not found for less than this (a flash frame, a black frame):
+    // the row keeps its value; the pillars are kept by the tracker anyway.
+    "missingGraceSeconds": 5
   },
 
   "items": {

@@ -16,11 +16,14 @@ public readonly record struct PillarPanel(Rectangle Box, Rectangle Crop, int Min
 /// <summary>
 /// Finds the war pillar ("เสาวอ") panels under the top-left gauge and reads each countdown.
 /// A panel is recognised by its icon box: a 1-px light outline with a 1-px blue line (FrameColor)
-/// inside it; the blue line's top-left corner is the panel's reference point. The strip at FrameY
+/// inside it; the line's top-left corner is the panel's reference point. While the pillar is
+/// attacked the game flashes the whole box red/pink: a box with a line of any other colour (darker
+/// than its outline by LineMinContrast) counts only with a pixel-exact timer or its HP track. The strip at FrameY
 /// (+-SearchY) is searched from SearchLeft to the right edge, and further panels stack downward
 /// (StackPitchY apart) under each one found, so any number of panels in any slot is found. The timer is Windows' Tahoma without smoothing (white, black outline): each glyph
 /// is cut out by its ink columns and looked up pixel-exactly among Tahoma digits and ':' rendered
-/// at start-up (FontMinHeight..FontMaxHeight, like the item counts). Only "H..H:MM" with all
+/// at start-up (FontMinHeight..FontMaxHeight, like the item counts); when icon art touches the
+/// band, each glyph is matched inside its own box instead (ScanTimer). Only "H..H:MM" with all
 /// digits of one font height is accepted. Reuses its buffers; allocates nothing per frame.
 /// </summary>
 public sealed class WarPillarFinder
@@ -80,8 +83,8 @@ public sealed class WarPillarFinder
         for (int x = left; x < right; x++)
             for (int y = Math.Max(1, yNom - sy); y <= yNom + sy; y++)
             {
-                if (!IsFrame(f, x, y, s)) continue;
-                into.Add(ReadPanel(f, x, y, s));
+                if (TryPanel(f, x, y, s) is not { } panel) continue;
+                into.Add(panel);
                 if (pitch > 0) FindBelow(f, s, x, y, pitch, sx, sy, right, into);
                 x += boxW;   // next panel starts after this box
                 break;
@@ -106,8 +109,8 @@ public sealed class WarPillarFinder
                 int yy = yNext + (dy % 2 == 0 ? dy / 2 : -(dy + 1) / 2);   // nearest rows first
                 for (int xx = Math.Max(1, x - sx); xx <= Math.Min(right - 1, x + sx); xx++)
                 {
-                    if (!IsFrame(f, xx, yy, s)) continue;
-                    into.Add(ReadPanel(f, xx, yy, s));
+                    if (TryPanel(f, xx, yy, s) is not { } panel) continue;
+                    into.Add(panel);
                     (x, y, found) = (xx, yy, true);
                     break;
                 }
@@ -122,6 +125,52 @@ public sealed class WarPillarFinder
         int i = (y * f.Width + x) * 4;
         var c = _c.FrameColor;
         return Math.Abs(px[i + 2] - c[0]) + Math.Abs(px[i + 1] - c[1]) + Math.Abs(px[i] - c[2]) <= _c.FrameTolerance;
+    }
+
+    /// <summary>The panel whose line corner is at (x, y), or null. A blue box (the line's colour, as
+    /// always) is a panel; a box of any other line colour (the red/pink flash while the pillar is
+    /// attacked, or a blend) only by its geometry plus a pixel-exact timer or the HP track.</summary>
+    PillarPanel? TryPanel(Frame f, int x, int y, HudScale s)
+    {
+        if (IsFrame(f, x, y, s)) return ReadPanel(f, x, y, s);
+        if (!IsOutlinedBox(f, x, y, s)) return null;
+        var p = ReadPanel(f, x, y, s);
+        return p.Readable || p.Hp >= 0 ? p : null;
+    }
+
+    static int Lum(ReadOnlySpan<byte> px, int i) => (px[i + 2] * 3 + px[i + 1] * 6 + px[i]) / 10;
+
+    /// <summary>Light outline pixel at (ox, oy) with a line pixel (lx, ly) inside it that is at least
+    /// LineMinContrast darker: the box's edge whatever colour the line is.</summary>
+    bool Edge(ReadOnlySpan<byte> px, Frame f, int lx, int ly, int ox, int oy)
+    {
+        if ((uint)lx >= (uint)f.Width || (uint)ly >= (uint)f.Height || (uint)ox >= (uint)f.Width || (uint)oy >= (uint)f.Height) return false;
+        int o = Lum(px, (oy * f.Width + ox) * 4);
+        return o >= _c.OutlineMinLum && o - Lum(px, (ly * f.Width + lx) * 4) >= _c.LineMinContrast;
+    }
+
+    /// <summary>The box geometry alone (any line colour): light outline with a darker 1-px line inside
+    /// it along the left column and the top row, FrameMinShare of the samples each.</summary>
+    bool IsOutlinedBox(Frame f, int x, int y, HudScale s)
+    {
+        var px = f.Pixels;
+        int ox = Math.Max(1, (int)Math.Round(s.X)), oy = Math.Max(1, (int)Math.Round(s.Y));
+        int y10 = y + (int)Math.Round(10 * s.Y), y25 = y + (int)Math.Round(25 * s.Y), x20 = x + (int)Math.Round(20 * s.X);
+        if (!Edge(px, f, x, y10, x - ox, y10) || !Edge(px, f, x, y25, x - ox, y25) || !Edge(px, f, x20, y, x20, y - oy)) return false;
+        int hit = 0, n = 0;
+        for (int dy = 2; dy <= _c.FrameHeight; dy++, n++)
+        {
+            int yy = y + (int)Math.Round(dy * s.Y);
+            if (Edge(px, f, x, yy, x - ox, yy)) hit++;
+        }
+        if (hit < _c.FrameMinShare * n) return false;
+        hit = n = 0;
+        for (int dx = 2; dx <= _c.FrameWidth; dx++, n++)
+        {
+            int xx = x + (int)Math.Round(dx * s.X);
+            if (Edge(px, f, xx, y, xx, y - oy)) hit++;
+        }
+        return hit >= _c.FrameMinShare * n;
     }
 
     bool IsFrame(Frame f, int x, int y, HudScale s)
@@ -193,16 +242,22 @@ public sealed class WarPillarFinder
 
         var px = f.Pixels;
         int dyMax = s.Y == 1 ? 0 : 1;
+        // Mode 0: the track's own colours (dark-blue border, light-blue row under the bar). Mode 1
+        // (the red/pink flash tints both): colour-free, the border row darker than the row under
+        // the bar by BarMinContrast, and that row light. The fill and the empty track keep their
+        // colours in the flash.
+        for (int mode = 0; mode < 2; mode++)
         for (int dy = 0; dy <= dyMax * 2; dy++)
         {
             int ty = yNom + (dy == 0 ? 0 : dy == 1 ? -1 : 1);
+            int lightRow = ty + barH + 1;
             // Longest dark run on the border row.
             int bestA = -1, bestB = -1;
             for (int x = sx0; x <= sx1;)
             {
-                if (!Border(px, f, x, ty)) { x++; continue; }
+                if (!TrackBorder(px, f, mode, x, ty, lightRow)) { x++; continue; }
                 int a = x;
-                while (x <= sx1 && Border(px, f, x, ty)) x++;
+                while (x <= sx1 && TrackBorder(px, f, mode, x, ty, lightRow)) x++;
                 if (x - a > bestB - bestA + 1) (bestA, bestB) = (a, x - 1);
             }
             if (bestA < 0) continue;
@@ -211,9 +266,11 @@ public sealed class WarPillarFinder
             int left = bestA + 1, right = bestB - 1, len = right - left + 1;
             if (Math.Abs(len - expect) > tol) continue;
             // The light row just under the bar.
-            int lightRow = ty + barH + 1, light = 0;
-            for (int x = left; x <= right; x++) if (LightBlue(px, f, x, lightRow)) light++;
+            int light = 0;
+            for (int x = left; x <= right; x++)
+                if (mode == 0 ? LightBlue(px, f, x, lightRow) : Lum(px, (lightRow * f.Width + x) * 4) >= _c.BarLightMinLum) light++;
             if (light < _c.FrameMinShare * len) continue;
+
 
             // Middle rows of the bar (the top and bottom rows are a highlight and a shadow).
             int r0 = ty + 1 + barH / 4, r1 = ty + barH - barH / 4;
@@ -230,6 +287,12 @@ public sealed class WarPillarFinder
         }
         return (-1, false);
     }
+
+    /// <summary>Border pixel of the HP track: by its colour (mode 0) or, in the red flash (mode 1),
+    /// at least BarMinContrast darker than the row under the bar in the same column.</summary>
+    bool TrackBorder(ReadOnlySpan<byte> px, Frame f, int mode, int x, int y, int lightRow) =>
+        mode == 0 ? Border(px, f, x, y)
+                  : Lum(px, (lightRow * f.Width + x) * 4) - Lum(px, (y * f.Width + x) * 4) >= _c.BarMinContrast;
 
     bool Border(ReadOnlySpan<byte> px, Frame f, int x, int y)
     {
@@ -270,14 +333,124 @@ public sealed class WarPillarFinder
             }
 
         int count = 0;
-        for (int x = 0; x < w;)
+        bool cut = true;
+        for (int x = 0; x < w && cut;)
         {
             if (!ColumnHasInk(x, w, h)) { x++; continue; }
             int a = x;
             while (x < w && ColumnHasInk(x, w, h)) x++;
-            if (!AddSegment(a, x - 1, w, h, ref count)) return -1;
+            cut = AddSegment(a, x - 1, w, h, ref count);
         }
-        return Parse(count);
+        int minutes = cut ? Parse(count) : -1;
+        return minutes >= 0 ? minutes : ScanTimer(w, h, Math.Max(_c.TimerMaxGap, (int)Math.Ceiling(_c.TimerMaxGap * s.X)));
+    }
+
+    /// <summary>One rendered glyph (from its lookup key): its ink pixels and its halo, the pixels
+    /// 4-adjacent to the ink that are not ink (where the game draws the black outline; its diagonal corners are not outlined), as offsets
+    /// from the glyph box's top-left (the halo reaches one pixel outside the box).</summary>
+    sealed record GlyphBits(char Ch, int FontHeight, int W, int H, int[] Ink, int[] Halo);
+
+    List<GlyphBits>? _bits;
+    readonly List<(char Ch, int X, int W, int Top, int Bottom, int Font)> _found = [];
+    bool[] _inChain = new bool[32];
+
+    List<GlyphBits> Bits()
+    {
+        if (_bits is not null) return _bits;
+        var list = new List<GlyphBits>();
+        foreach (var (key, (ch, fh)) in _glyphs)
+        {
+            var rows = key.Split('/');
+            int gw = rows[0].Length, gh = rows.Length;
+            bool On(int x, int y) => x >= 0 && y >= 0 && x < gw && y < gh && rows[y][x] == '#';
+            var ink = new List<int>();
+            var halo = new List<int>();
+            for (int y = -1; y <= gh; y++)
+                for (int x = -1; x <= gw; x++)
+                {
+                    if (On(x, y)) { ink.Add(y); ink.Add(x); continue; }
+                    if (On(x - 1, y) || On(x + 1, y) || On(x, y - 1) || On(x, y + 1)) { halo.Add(y); halo.Add(x); }
+                }
+            list.Add(new GlyphBits(ch, fh, gw, gh, [.. ink], [.. halo]));
+        }
+        // Widest first: at one position the whole glyph wins over a part of it.
+        list.Sort((a, b) => b.W != a.W ? b.W.CompareTo(a.W) : b.H.CompareTo(a.H));
+        return _bits = list;
+    }
+
+    /// <summary>Glyph g at (x, y) of the ink map: all its ink pixels ink and its halo (inside the
+    /// band) no ink. Other pixels (the hollow inside a 0, icon art next to the text) do not matter:
+    /// the game's text has a black outline but no background.</summary>
+    bool At(GlyphBits g, int x, int y, int w, int h)
+    {
+        var ink = g.Ink;
+        for (int i = 0; i < ink.Length; i += 2)
+            if (!_ink[(y + ink[i]) * w + x + ink[i + 1]]) return false;
+        var halo = g.Halo;
+        for (int i = 0; i < halo.Length; i += 2)
+        {
+            int yy = y + halo[i], xx = x + halo[i + 1];
+            if ((uint)yy < (uint)h && (uint)xx < (uint)w && _ink[yy * w + xx]) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Fallback when the ink columns cannot be cut into glyphs (something white touches the band):
+    /// every rendered glyph is looked for pixel-exactly inside its own box; the matches (digits on
+    /// one line, ':' between them) are chained left to right at most maxGap columns apart and must
+    /// give exactly one "H..H:MM". -1 when none or more than one does.
+    /// </summary>
+    int ScanTimer(int w, int h, int maxGap)
+    {
+        _found.Clear();
+        foreach (var g in Bits())
+            for (int y = 0; y + g.H <= h; y++)
+                for (int x = 0; x + g.W <= w; x++)
+                    if (At(g, x, y, w, h)) _found.Add((g.Ch, x, g.W, y, y + g.H - 1, g.FontHeight));
+        if (_found.Count < 4) return -1;
+        _found.Sort((a, b) => a.X.CompareTo(b.X));
+
+        int result = -1;
+        if (_inChain.Length < _found.Count) _inChain = new bool[_found.Count * 2];
+        Array.Clear(_inChain);
+        // Each digit not already inside an earlier chain is a possible first glyph (never the middle
+        // of the hours); follow the nearest glyph of the same font and line.
+        for (int i = 0; i < _found.Count; i++)
+        {
+            var first = _found[i];
+            if (first.Ch == ':' || _inChain[i]) continue;
+            int count = 0, end = first.X + first.W - 1, j = i;
+            Put(count++, first);
+            while (count < MaxGlyphs)
+            {
+                int next = -1;
+                for (int k = j + 1; k < _found.Count; k++)
+                {
+                    var c = _found[k];
+                    if (c.X <= end) continue;   // overlaps the last glyph
+                    if (c.X - end - 1 > maxGap) break;
+                    if (c.Font != first.Font) continue;
+                    bool sameLine = c.Ch == ':' ? c.Top > first.Top && c.Bottom <= first.Bottom
+                                                : c.Top == first.Top && c.Bottom == first.Bottom;
+                    if (!sameLine) continue;
+                    if (next < 0 || c.X < _found[next].X) next = k;
+                }
+                if (next < 0) break;
+                _inChain[next] = true;
+                Put(count++, _found[next]);
+                end = _found[next].X + _found[next].W - 1;
+                j = next;
+            }
+            int m = Parse(count);
+            if (m < 0) continue;
+            if (result >= 0 && result != m) return -1;   // two different readings: none
+            result = m;
+        }
+        return result;
+
+        void Put(int slot, (char Ch, int X, int W, int Top, int Bottom, int Font) g) =>
+            (_chars[slot], _heights[slot], _tops[slot], _bottoms[slot]) = (g.Ch, g.Font, g.Top, g.Bottom);
     }
 
     bool ColumnHasInk(int x, int w, int h)
@@ -367,8 +540,8 @@ public sealed class WarPillarFinder
 /// ForgetAfterMinutes past zero, so a panel that comes back is the same pillar and never alerts
 /// twice. An unconfirmed new pillar not seen again within 3 s is dropped (a misread).
 /// HP is part of a pillar's state: it never rises (a higher reading is ignored); a lower one is
-/// taken only when read on two consecutive polls of that pillar (the higher of the two), so one
-/// misread never counts. Each HP level (HpLevels, e.g. 75/50/25) alerts once per pillar when the
+/// taken only when read on two consecutive readings of that pillar (the higher of the two; polls
+/// where it was not seen, e.g. flash frames, do not break the pair), so one misread never counts. Each HP level (HpLevels, e.g. 75/50/25) alerts once per pillar when the
 /// pillar's HP is below it; several levels at once give one alert, for the lowest. A pillar first
 /// seen already below a level alerts once on confirmation, like the time alert. In matching, HP
 /// only breaks ties of remaining time (a reading above a pillar's HP is the worse match).
@@ -437,8 +610,8 @@ public sealed class WarPillarTracker(int stablePolls, int forgetAfterMinutes, in
             _assigned[obs] = p;
             p.Taken = _stamp;
         }
-        // Not seen this poll: a pending HP drop needs two consecutive polls.
-        foreach (var p in _pillars) if (p.Taken != _stamp) p.PendingHp = -1;
+        // Not seen this poll (a flash frame, a window over it): nothing changes; a pending HP drop
+        // stays pending for the pillar's next reading.
 
         hpOut?.Clear();
         for (int i = 0; i < readings.Count; i++)
@@ -508,7 +681,7 @@ public sealed class WarPillarTracker(int stablePolls, int forgetAfterMinutes, in
 /// pillar's HP ("00:15 (80%) · 00:42 (100%)"), "ไม่มี" without panels (no war: never unreadable),
 /// "?" only while the game's tooltip text covers a panel (timer or HP bar) that was showing (the
 /// only way into "อ่านค่าไม่ได้", as for the kill counter). A box whose timer cannot be read without
-/// tooltip text leaves the row as it was.
+/// tooltip text leaves the row as it was; so do panels missing for less than MissingGraceSeconds.
 /// </summary>
 public sealed class WarPillarDetector : IHudDetector
 {
@@ -526,6 +699,7 @@ public sealed class WarPillarDetector : IHudDetector
     readonly List<WarPillarTracker.Alert> _fire = [];
     readonly List<Rectangle> _lastBoxes = [];
     bool _showing;
+    DateTime _lastFoundAt;
 
     public WarPillarDetector(WatcherConfig config, HudReadings readings, HudOptions options)
     {
@@ -613,6 +787,9 @@ public sealed class WarPillarDetector : IHudDetector
             if (_showing) _readings.Set(AlertIds.WarPillar, RowReading.Unknown);
             return;   // _lastBoxes kept: the panels are still there under the tooltip
         }
+        if (_panels.Count > 0) _lastFoundAt = now;
+        else if (_showing && (now - _lastFoundAt).TotalSeconds < _c.MissingGraceSeconds)
+            return;   // a short gap (flash or black frame): the row keeps its value
         if (_panels.Count == 0)
         {
             _showing = false;

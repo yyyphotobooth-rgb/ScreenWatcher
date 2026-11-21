@@ -273,4 +273,5 @@ public sealed record WarPillarConfig(
     int[] CoverText, int CoverTextMin, int CoverOutlineMax,
     string HpMessage, int[] HpLevels, int BarBorderY, int[] BarSearchX, int BarHeight, int BarLength, int BarLengthTolerance,
     int BarBorderMaxLum, int BarBorderMinBlue, int BarLightMinLum, int FillMinRed, int FillMinRedOverBlue, int FillMaxGreenOverRed,
-    int HpRiseTolerance, int StackPitchY = 0, int StackMax = 0);
+    int HpRiseTolerance, int StackPitchY = 0, int StackMax = 0,
+    int LineMinContrast = 40, int BarMinContrast = 50, int TimerMaxGap = 8, double MissingGraceSeconds = 5);
