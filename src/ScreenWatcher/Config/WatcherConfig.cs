@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ScreenWatcher.Config;
 
 /// <summary>All tunable values. Loaded from detectors.json (the single source of truth).</summary>
-public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel, InventoryConfig Inventory, LevelConfig Level, ExpTestConfig ExpTest, ExpStallConfig ExpStall, ExpCardConfig ExpCard, WarPillarConfig WarPillar)
+public sealed record WatcherConfig(int PollIntervalMs, WindowConfig Window, DropConfig Drop, HudScaleConfig HudScale, DeathConfig Death, CollectConfig Collect, AlertsConfig Alerts, AmmoConfig Ammo, FuelConfig Fuel, KillConfig Kill, ItemsConfig Items, DiagnosticsConfig Diagnostics, UnreadableConfig Unreadable, QuestPanelConfig QuestPanel, InventoryConfig Inventory, LevelConfig Level, ExpTestConfig ExpTest, ExpStallConfig ExpStall, BuffConfig ExpCard, WarPillarConfig WarPillar, BuffConfig Handshake, BuffBarConfig BuffBar)
 {
     public const string FileName = "detectors.json";
 
@@ -251,15 +251,22 @@ public sealed record ExpTestConfig(
 /// (all channels at most OutlineMax) within one pixel.</summary>
 public sealed record TextInk(int[] Min, int[] Max, int OutlineMax);
 
-/// <summary>Sub-alert "บัตร exp ครบ 30 นาที" on the kill row (Detection/Hud/ExpCardDetector.cs).
-/// Emblem = the card icon's top part (hex RGB rows, 1.0 layout) whose top edge is at EmblemTop; it is
-/// searched at every x from SearchLeft and +-SearchY rows (SearchYScaled on a stretched HUD) and
-/// found when the mean colour difference per channel is at most MaxDistance. The alert fires once
-/// the card, seen earlier, is absent for AbsentSeconds; "ไม่มีบัตร" shows after NoCardAfterPolls
-/// absent polls. Picture: the strip x CropLeft..right edge, y 0..CropHeight.</summary>
-public sealed record ExpCardConfig(
+/// <summary>A timed buff on the top buff bar (Detection/Hud/BuffDetector.cs): "expCard" (บัพมอน 300 ตัว)
+/// and "handshake" (บัพจับมือ). Emblem = the buff icon's top part (hex RGB rows, 1.0 layout) whose
+/// top edge is at EmblemTop; it is searched at every x from SearchLeft and +-SearchY rows
+/// (SearchYScaled on a stretched HUD) and found when the mean colour difference per channel is at
+/// most MaxDistance. The alert fires once the buff, seen earlier, is absent for AbsentSeconds;
+/// "ไม่มีบัพ" shows after NoCardAfterPolls absent polls. Picture: <see cref="BuffBarConfig"/>.</summary>
+public sealed record BuffConfig(
     string Message, double AbsentSeconds, int NoCardAfterPolls, double EmblemTop, double SearchLeft, int SearchY, int SearchYScaled,
-    double MaxDistance, double CropLeft, int CropHeight, string[] Emblem);
+    double MaxDistance, string[] Emblem);
+
+/// <summary>Alert picture of the buff rows: the buff bar only. From CropLeft, CropHeight tall (1.0
+/// layout); the right end is the last countdown text pixel (yellow: R,G >= TextMinRG, B <= TextMaxB,
+/// rows TextRows[0]..TextRows[1]) reached from CropLeft with gaps of at most MaxGap, plus Margin;
+/// FallbackWidth when no text is found.</summary>
+public sealed record BuffBarConfig(
+    double CropLeft, int CropHeight, int[] TextRows, int TextMinRG, int TextMaxB, int MaxGap, int Margin, int FallbackWidth);
 
 /// <summary>War pillar ("เสาวอ") panels (Detection/Hud/WarPillarDetector.cs). Positions are the 1.0
 /// layout relative to the icon box's blue line top-left corner (client y FrameY at 1.0; x is

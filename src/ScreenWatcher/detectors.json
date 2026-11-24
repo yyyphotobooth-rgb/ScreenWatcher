@@ -288,13 +288,16 @@
   },
 
   "expCard": {
-    // Sub-alert on the kill row (Detection/Hud/ExpCardDetector.cs). The EXP card is a 20x20 buff
+    // "บัพมอน 300 ตัว" (EXP card buff), second line of the kill row (Detection/Hud/BuffDetector.cs;
+    // alert id "expCard" kept from 1.2 so the saved checkbox carries over). The EXP card is a 20x20 buff
     // icon (blue winged emblem) in the top buff bar, icons y 1..20 at 1.0; its slot moves as other
     // buffs come and go, so the whole bar width is searched. The countdown text ("14 นาที") covers
     // icon rows 11..20, so only rows 1..10 are compared (the emblem below).
     // Measured on samples/from-chat/expcard_buffbar_full.png (1024x768 client at (1,8), HUD 1.0,
     // card = 10th icon at x 476): same emblem 0.1, next best x+-1 30, best spot with the icon masked 53.
-    "message": "บัตร exp ครบ 30 นาที",
+    // samples/from-chat/buffbar_handshake_and_kill300_1920x1080.png (native /ss, HUD measured 1.00):
+    // card = 8th icon at x 428, distance 0.2; icon masked: best spot 56.5.
+    "message": "บัพมอน 300 ตัว ครบ 30 นาทีแล้ว",
     // Card gone for this long, polls in a row (any poll that sees it restarts the wait).
     "absentSeconds": 10,
     "noCardAfterPolls": 2,
@@ -302,8 +305,6 @@
     // Mean colour difference per channel (0..255). Card: 0.1 at 1.0, 13..15 on a synthetic
     // bilinear 1.15..1.5 stretch; best spot with the card masked: 48..56.
     "maxDistance": 28,
-    // Alert picture: the buff bar strip from x 250 to the right edge, 36 px tall (1.0 layout).
-    "cropLeft": 250, "cropHeight": 36,
     // From samples/from-chat/expcard_icon_crop.png rows 3..12, columns 4..23 (RRGGBB per pixel).
     "emblem": [
       "0B274B074891064A9304438C044691044794044794044793044692044691044692044692044793044793044794044693044490064A96074A940B2C54",
@@ -317,6 +318,46 @@
       "3275BB8397AC9AAAB883A1B22E466D6084A86FA4CA89A6C899B6D24B6EAEB1CDDC84A7CC4D79AD5692BD79A4C5456088527A968FA7BA8C9FB13C74AD",
       "1965B631639D3D668C7F929D6A7C9A253A6A4A80AB436398566C9E5E9CD46DABD47DA9D9A6BDE3ABCAE4546B9141547D889DAD5072902F5C94165DA8"
     ]
+  },
+
+  "handshake": {
+    // "บัพจับมือ" (handshake buff, 60 minutes), third line of the kill row (Detection/Hud/BuffDetector.cs,
+    // same method as expCard). 20x20 buff icon, two hands on a blue top band; the countdown text
+    // ("27 นาที") covers icon rows 11..20, so only rows 1..10 are compared, and only columns 1..18
+    // (the outer columns blend with whatever is behind the bar).
+    // Measured: samples/from-chat/buffbar_handshake_and_kill300_1920x1080.png (HUD 1.00, 5th icon,
+    // x 356..375): 0.0 at (357,1); icon masked: best spot 56.6. expcard_buffbar_full.png (1024x768,
+    // also has it at x 356): 0.03. handshake_icon_crop_26x20.png (another capture, "35 นา"): 0.004.
+    "message": "บัพจับมือ ครบ 60 นาทีแล้ว",
+    "absentSeconds": 10,
+    "noCardAfterPolls": 2,
+    "emblemTop": 1, "searchLeft": 0, "searchY": 3, "searchYScaled": 5,
+    "maxDistance": 28,
+    // From buffbar_handshake_and_kill300_1920x1080.png x 357..374, y 1..10 (RRGGBB per pixel).
+    "emblem": [
+      "147AD40471D40471D20472D80472D90471D30471D40472D70474DD0475E10476E30475E10472D90472D80471D60470D10471D41177D0",
+      "094BB6013FAA013B9A013C9F013FB00140AE0140A50148B90155D8015AD7015BDE015DE20155D7014BC60141AB013B9A013999074093",
+      "0155D50050D2004DC50047B7004ED50159EF0358E6096CE8116DEE1A53C91E59CA157DF9108EF80873F20357E80051D7004DC6014AB2",
+      "0192FE00A0FD00AAFC00A1FC0199FC05A0F9146EBD40589F937984EED0B9F0E6D6B6B0C07493D4448BDA1094F602A4FC01A6FC02A0FC",
+      "1F9EF03898EA4587B8567E9D76809C917E8FB18C8BCDA999E2C0A0EDCDA8F1D5B3F2DFC7EAE5DDD6D8E1B8D6ED9DCBDE57B1EE2F8CD1",
+      "A8919BD6A49BDDA598E2A997E8B49BEFB399F1C6A4EDC39CEAC19BE7BC9AE8B798ECC6A6F3D4B3F9E0C1F9EACFF5EDDAE4DFC7CFC4B9",
+      "D6B7A8EEC0A2ECBEA0EABA9CE6AD93ECCAADE5B491DC9D81DA9981CF8873D8967EE7BA9EEAC7ADEBC9B1EBCAB5EED1BCF1D0B7DDC2B1",
+      "D1BCACE9C3A5E9C1A4E5AC91E9BDA1EAC3A9E1A48BE8C0A7EAC6ADE9C5ADDFAE97D8947DE8BA9EEAC4AAEAC8B0E8CBB7E6CBB8D4C5BA",
+      "D0BFAFE9C5A8E7B99DE2AA91E4AF95E4B198EAC5ACEAC7AFEAC9B1EBCAB2EAC6AEE6BAA1E1A88EE3A98EE6B297E7BBA1E6C3ABD3C1B3",
+      "CEBCACE7C3A6E8C2A6E7B9A0E7BBA1E9C5ADEACBB4EBCAB2EAC9B0EAC8AEEAC2A6E8B79CE9C0A6E4AE94E19D84E4A188E8B89DD6C0B1"
+    ]
+  },
+
+  "buffBar": {
+    // Alert picture of the buff rows (expCard, handshake): the buff bar only. x from cropLeft,
+    // y 0..cropHeight (1.0 layout; icons y 1..20, countdown text y 10..19). The right end is the
+    // last yellow countdown-text pixel (R,G >= textMinRG, B <= textMaxB in textRows) reached from
+    // cropLeft with gaps <= maxGap (icons without text: 71 px gap in the 1920x1080 sample), plus
+    // margin; fallbackWidth when no text is found. Ends: x 719 (1024x768 sample), 695 (1920x1080).
+    // Height 22 leaves out the target HP bar under the bar's middle (1024x768: from y ~25).
+    "cropLeft": 250, "cropHeight": 22,
+    "textRows": [ 10, 19 ], "textMinRG": 200, "textMaxB": 80,
+    "maxGap": 80, "margin": 24, "fallbackWidth": 480
   },
 
   "warPillar": {

@@ -9,15 +9,18 @@ namespace ScreenWatcher.UI;
 /// Rows with a <see cref="Unit"/> have an editable threshold; <see cref="SideChooser"/> rows can
 /// show the ซ้าย/ขวา chooser (two icons of the same potion type on the item bar).
 /// </summary>
-/// Rows with a <see cref="SubId"/> have a second line: its own checkbox, label and "ตอนนี้" value
-/// (own alert id and saved on/off), e.g. the EXP card under the kill counter.
+/// Rows with <see cref="Subs"/> have more lines: each with its own checkbox, label and "ตอนนี้" value
+/// (own alert id and saved on/off), e.g. the buffs under the kill counter.
 public sealed record AlertRowSpec(string Id, string Label, bool Implemented, string? Unit = null, int? DefaultThreshold = null,
     int MaxThreshold = 9999, bool SideChooser = false, int MinThreshold = 0, bool ResetButton = false, bool WideNow = false, int NowWidth = 72,
-    string? SubId = null, string? SubLabel = null)
+    SubLine[]? Subs = null)
 {
-    /// <summary>Row height at 96 dpi.</summary>
-    public int Height => !Implemented ? 44 : SubId is not null ? 72 : 48;
+    /// <summary>Row height at 96 dpi (36 per line when the row has sub-lines).</summary>
+    public int Height => !Implemented ? 44 : Subs is { Length: > 0 } ? 36 * (Subs.Length + 1) : 48;
 }
+
+/// <summary>An extra line of a row: own alert id (settings key) and label.</summary>
+public sealed record SubLine(string Id, string Label);
 
 public static class AlertRowCatalog
 {
@@ -35,8 +38,9 @@ public static class AlertRowCatalog
         new(AlertIds.HpPotions, "ยาเลือดเหลือ", Implemented: true, "ชิ้น", 5, SideChooser: true),
         new(AlertIds.ShieldPotions, "ยาเกราะเหลือ", Implemented: true, "ชิ้น", 5, SideChooser: true),
         new(AlertIds.SpPotions, "ยา SP เหลือ", Implemented: true, "ชิ้น", 5, SideChooser: true),
-        // Second line: the EXP card left the buff bar ("ตอนนี้": มีบัตร / ไม่มีบัตร).
-        new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: true, SubId: AlertIds.ExpCard, SubLabel: "บัตร exp ครบ 30 นาที"),
+        // Lines 2 and 3: the EXP card buff / the handshake buff left the buff bar ("ตอนนี้": มีบัพ / ไม่มีบัพ).
+        new(AlertIds.Kill300, "ยิงมอนครบ 300 ตัว", Implemented: true,
+            Subs: [new(AlertIds.ExpCard, "บัพมอน 300 ตัว"), new(AlertIds.Handshake, "บัพจับมือ")]),
         // War pillars: one alert per pillar at N minutes left. "ตอนนี้": every timer left to right
         // ("00:15 · 00:42"; "00:15 +1" when they do not fit), ไม่มี, or ? (tooltip over a panel).
         new(AlertIds.WarPillar, "เสาวอ แจ้งเมื่อเหลือ", Implemented: true, "นาที", 10, MaxThreshold: 120, MinThreshold: 1, NowWidth: 118),
@@ -71,9 +75,9 @@ sealed class AlertRow : Control
     readonly Label? _unit;
     readonly Label? _reset;
     readonly Label _now = new() { AutoSize = false, TextAlign = ContentAlignment.MiddleRight, UseMnemonic = false };
-    // Second line (Spec.SubId): own checkbox, label and value.
-    readonly DarkCheck? _subCheck;
-    readonly Label? _subLabel, _subNow;
+    // Extra lines (Spec.Subs): own checkbox, label and value each.
+    readonly DarkCheck[] _subCheck = [];
+    readonly Label[] _subLabel = [], _subNow = [];
     bool _reachedOn, _chooserOn, _watchRight;
     int _thresholdValue;
 
@@ -89,8 +93,8 @@ sealed class AlertRow : Control
     public event Action<AlertRow, bool>? SideChanged;
     /// <summary>User clicked "รีเซ็ต" (rows with ResetButton).</summary>
     public event Action<AlertRow>? ResetClicked;
-    /// <summary>User switched the second line's alert on/off (rows with SubId).</summary>
-    public event Action<AlertRow, bool>? SubAlertToggled;
+    /// <summary>User switched an extra line's alert on/off (rows with Subs): the line's alert id.</summary>
+    public event Action<AlertRow, string, bool>? SubAlertToggled;
 
     public AlertRow(AlertRowSpec spec)
     {
@@ -139,14 +143,21 @@ sealed class AlertRow : Control
             Controls.Add(_reset);
         }
 
-        if (spec.SubId is not null && spec.Implemented)
+        if (spec.Subs is { Length: > 0 } subs && spec.Implemented)
         {
-            _subCheck = new DarkCheck { AccessibleName = spec.SubLabel };
-            _subLabel = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft, UseMnemonic = false, Text = spec.SubLabel, Font = Theme.Body };
-            _subNow = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleRight, UseMnemonic = false, Text = "—", Font = Theme.Value };
-            _subLabel.Click += (_, _) => _subCheck.Checked = !_subCheck.Checked;
-            _subCheck.CheckedChanged += (_, _) => SubAlertToggled?.Invoke(this, _subCheck.Checked);
-            Controls.AddRange([_subCheck, _subLabel, _subNow]);
+            _subCheck = new DarkCheck[subs.Length];
+            _subLabel = new Label[subs.Length];
+            _subNow = new Label[subs.Length];
+            for (int i = 0; i < subs.Length; i++)
+            {
+                var sub = subs[i];
+                var check = _subCheck[i] = new DarkCheck { AccessibleName = sub.Label };
+                var label = _subLabel[i] = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft, UseMnemonic = false, Text = sub.Label, Font = Theme.Body };
+                _subNow[i] = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleRight, UseMnemonic = false, Text = "—", Font = Theme.Value };
+                label.Click += (_, _) => check.Checked = !check.Checked;
+                check.CheckedChanged += (_, _) => SubAlertToggled?.Invoke(this, sub.Id, check.Checked);
+                Controls.AddRange([check, label, _subNow[i]]);
+            }
         }
 
         if (spec.Implemented)
@@ -172,19 +183,23 @@ sealed class AlertRow : Control
         set => _check.Checked = value;
     }
 
-    /// <summary>The second line's alert switch (rows with SubId; false otherwise).</summary>
-    [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public bool SubAlertEnabled
+    int SubIndex(string id) => Spec.Subs is { } subs && _subCheck.Length == subs.Length ? Array.FindIndex(subs, s => s.Id == id) : -1;
+
+    /// <summary>An extra line's alert switch (false for an unknown id).</summary>
+    public bool GetSubAlertEnabled(string id) => SubIndex(id) is int i && i >= 0 && _subCheck[i].Checked;
+
+    public void SetSubAlertEnabled(string id, bool on)
     {
-        get => _subCheck?.Checked ?? false;
-        set { if (_subCheck is not null) _subCheck.Checked = value; }
+        int i = SubIndex(id);
+        if (i >= 0) _subCheck[i].Checked = on;
     }
 
-    /// <summary>The second line's "ตอนนี้" value (rows with SubId).</summary>
-    public void SetSubNow(string text)
+    /// <summary>An extra line's "ตอนนี้" value.</summary>
+    public void SetSubNow(string id, string text)
     {
-        if (_subNow is null || _subNow.Text == text) return;
-        _subNow.Text = text;
+        int i = SubIndex(id);
+        if (i < 0 || _subNow[i].Text == text) return;
+        _subNow[i].Text = text;
     }
 
     /// <summary>The row's alert threshold (rows with a unit). Setting it does not raise ThresholdChanged.</summary>
@@ -276,8 +291,8 @@ sealed class AlertRow : Control
         _label.ForeColor = live ? Theme.Text : Theme.Disabled;
         _reached.ForeColor = Theme.WarnText;
         _now.ForeColor = _reachedOn ? Theme.WarnValue : live ? Theme.Text : Theme.Disabled;
-        if (_subLabel is not null) _subLabel.ForeColor = Theme.Text;
-        if (_subNow is not null) _subNow.ForeColor = Theme.Text;
+        foreach (var l in _subLabel) l.ForeColor = Theme.Text;
+        foreach (var l in _subNow) l.ForeColor = Theme.Text;
         if (_unit is not null) _unit.ForeColor = _reachedOn ? Theme.WarnText : live ? Theme.Muted : Theme.Disabled;
         if (_reset is not null) (_reset.BackColor, _reset.ForeColor) = (Theme.Primary, Theme.Text);
         if (_threshold is not null) { _threshold.BorderColor = _reachedOn ? Theme.WarnBorder : Theme.InputBorder; _threshold.Invalidate(); }
@@ -299,18 +314,22 @@ sealed class AlertRow : Control
         x += S(18) + gap;
         int nowW = S(Spec.NowWidth), thrW = S(100);   // NowWidth 72 except "EXP ไม่ขยับเกิน" ("นิ่ง 120 นาที")
         int nowX = Width - pad - nowW;
-        if (_subCheck is not null)
+        if (_subCheck.Length > 0)
         {
-            // Two lines of equal height, each: checkbox · label · value ("ตอนนี้" also takes the
-            // threshold column: "ไม่มีบัตร" is long). The "ถึงเกณฑ์เตือนแล้ว" line is not shown here
+            // Lines of equal height, each: checkbox · label · value ("ตอนนี้" also takes the
+            // threshold column: "ไม่มีบัพ" is long). The "ถึงเกณฑ์เตือนแล้ว" line is not shown here
             // (the orange background and value still are).
-            int lh2 = h / 2, vx = nowX - gap - S(100);
-            _check.SetBounds(x, (lh2 - S(18)) / 2, S(18), S(18));
-            _label.SetBounds(x + S(18) + gap, 0, vx - gap - (x + S(18) + gap), lh2);
-            _now.SetBounds(vx, 0, Width - pad - vx, lh2);
-            _subCheck.SetBounds(x, lh2 + (lh2 - S(18)) / 2, S(18), S(18));
-            _subLabel!.SetBounds(x + S(18) + gap, lh2, vx - gap - (x + S(18) + gap), lh2);
-            _subNow!.SetBounds(vx, lh2, Width - pad - vx, lh2);
+            int lh = h / (_subCheck.Length + 1), vx = nowX - gap - S(100), lx = x + S(18) + gap;
+            _check.SetBounds(x, (lh - S(18)) / 2, S(18), S(18));
+            _label.SetBounds(lx, 0, vx - gap - lx, lh);
+            _now.SetBounds(vx, 0, Width - pad - vx, lh);
+            for (int i = 0; i < _subCheck.Length; i++)
+            {
+                int y = lh * (i + 1);
+                _subCheck[i].SetBounds(x, y + (lh - S(18)) / 2, S(18), S(18));
+                _subLabel[i].SetBounds(lx, y, vx - gap - lx, lh);
+                _subNow[i].SetBounds(vx, y, Width - pad - vx, lh);
+            }
             _reached.Visible = false;
             return;
         }

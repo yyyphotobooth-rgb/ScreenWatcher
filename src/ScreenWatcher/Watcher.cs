@@ -86,7 +86,7 @@ public sealed class Watcher : IDisposable
         _stall = new ExpStallDetector(config, Readings, Options, () => _level.LastLine);
         // _stall after _level: it uses the line the level row read on this poll.
         _hudDetectors = [new AmmoDetector(config, glyphs, Readings), new FuelDetector(config, Readings, Options),
-            _kill, new ExpCardDetector(config, Readings), new WarPillarDetector(config, Readings, Options), items, _inventory, _level, _stall];
+            _kill, BuffDetector.ExpCard(config, Readings), BuffDetector.Handshake(config, Readings), new WarPillarDetector(config, Readings, Options), items, _inventory, _level, _stall];
         ExpTest = new ExpTestRunner(config, _level.Reader);
         _unreadable = new UnreadableDetector(config, Readings, Options, () => items.BarHiddenPolls, id => _quest!.Covers(id));
         _quest = new QuestPanelDetector(config, Readings, Options, () => _unreadable.LimitSeconds,

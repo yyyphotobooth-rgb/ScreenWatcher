@@ -29,9 +29,12 @@ Discord bot (Discord.Net, runs inside the app).
   unverified: `samples/README.md`. Also here: the level-up quest panel (`QuestPanel*.cs`, its own
   message instead of the generic unreadable one) and the system message box (`SystemMessage.cs`,
   `InventoryDetector.cs`: row "ช่องเก็บของเต็ม", phrase matched as Tahoma 12 px, latched until the
-  row's "รีเซ็ต" button or Discord /reset). EXP card (`ExpCardDetector.cs`): blue emblem searched
-  along the whole top buff bar (template in detectors.json `expCard`), "บัตร exp ครบ 30 นาที" after
-  10 s absent; second line of the kill row with its own checkbox; not in the unreadable rule.
+  row's "รีเซ็ต" button or Discord /reset). Buffs (`BuffDetector.cs`, one class, own config each):
+  "บัพมอน 300 ตัว" (EXP card, blue winged emblem, detectors.json `expCard`, id kept from 1.2) and
+  "บัพจับมือ" (two hands, `handshake`); emblem top rows searched along the whole top buff bar;
+  "... ครบ 30/60 นาทีแล้ว" after 10 s absent; lines 2 and 3 of the kill row, own checkboxes,
+  "ตอนนี้" มีบัพ / ไม่มีบัพ; not in the unreadable rule. Alert picture = buff bar only (`buffBar`:
+  from x 250, 22 rows, right end follows the yellow countdown text).
   Occlusion rule (all HUD rows): "empty/low" only on a positive read (digits read confidently, an
   item slot that positively looks empty, 00000 in the red digits); anything drawn over a part
   (tooltip, window, cursor) is unreadable and keeps the last value. Kill counter: the panel exists

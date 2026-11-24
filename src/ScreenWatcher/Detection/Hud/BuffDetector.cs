@@ -5,28 +5,30 @@ using ScreenWatcher.Imaging;
 namespace ScreenWatcher.Detection.Hud;
 
 /// <summary>
-/// Finds the EXP card's blue winged emblem anywhere along the top buff bar (its slot moves as other
-/// buffs come and go). Only the emblem's top part is compared (the countdown text covers the lower
+/// Finds a buff's emblem (EXP card: blue winged emblem; handshake: two hands) anywhere along the top
+/// buff bar (its slot moves as other buffs come and go). Only the emblem's top part is compared (the countdown text covers the lower
 /// half of every buff icon). The emblem (1.0 layout) is resampled once per HUD scale; matching is
 /// the mean colour difference per channel at every x and a few rows around the bar's y, with an
 /// early exit, so it allocates nothing per poll.
 /// </summary>
-public sealed class ExpCardMatcher
+public sealed class BuffMatcher
 {
-    readonly ExpCardConfig _c;
+    readonly BuffConfig _c;
+    readonly string _name;
     readonly byte[] _emblem;          // 1.0 layout, RGB
     readonly int _ew, _eh;
     byte[] _t = [];                   // template at the current scale, RGB
     int _tw, _th;
     HudScale _tScale = new(double.NaN, double.NaN);
 
-    public ExpCardMatcher(ExpCardConfig config)
+    public BuffMatcher(BuffConfig config, string name = "buff")
     {
         _c = config;
+        _name = name;
         _eh = config.Emblem.Length;
         _ew = _eh == 0 ? 0 : config.Emblem[0].Length / 6;
         if (_eh == 0 || _ew == 0 || config.Emblem.Any(r => r.Length != _ew * 6))
-            throw new InvalidDataException("expCard.emblem: rows of equal length (6 hex characters per pixel) expected");
+            throw new InvalidDataException($"{_name}.emblem: rows of equal length (6 hex characters per pixel) expected");
         _emblem = new byte[_ew * _eh * 3];
         for (int y = 0; y < _eh; y++)
             for (int i = 0; i < _ew * 3; i++)
@@ -67,13 +69,6 @@ public sealed class ExpCardMatcher
 
     public bool IsPresent(Frame frame, HudScale scale) => Find(frame, scale).Distance <= _c.MaxDistance;
 
-    /// <summary>The buff bar strip (alert picture): from CropLeft to the client's right edge, CropHeight tall.</summary>
-    public Rectangle CropRect(int width, int height, HudScale scale)
-    {
-        int x = Math.Clamp(scale.MapX(_c.CropLeft), 0, width);
-        return new Rectangle(x, 0, width - x, Math.Min(height, scale.SizeY(_c.CropHeight)));
-    }
-
     /// <summary>Bilinear resample of the 1.0 emblem to this scale (only when the scale changed).</summary>
     void Prepare(HudScale scale)
     {
@@ -104,36 +99,77 @@ public sealed class ExpCardMatcher
 }
 
 /// <summary>
-/// Sub-alert "บัตร exp ครบ 30 นาที" (shares the kill row). Once the card was seen, it fires once
-/// when the card has been absent for AbsentSeconds of continuous polls (any poll that sees it
-/// restarts the wait: cursor over the icon, flicker). Re-arms only when the card is seen again.
-/// "ตอนนี้": มีบัตร / ไม่มีบัตร. Not part of the "อ่านค่าไม่ได้" rule (no card is a normal state).
+/// Alert picture of the buff rows: the buff bar only (all icons and their countdown text), not the
+/// full frame. Left edge and height are fixed (1.0 layout, scaled); the right end follows the yellow
+/// countdown text from the left edge, crossing gaps up to MaxGap (icons without text), so the target
+/// HP bar and the quest text further right are left out. Allocation-free scan of a few rows.
 /// </summary>
-public sealed class ExpCardDetector : IHudDetector, IArmedState
+public static class BuffBar
 {
-    public const string HaveText = "มีบัตร";
-    public const string NoneText = "ไม่มีบัตร";
+    public static Rectangle CropRect(Frame frame, HudScale scale, BuffBarConfig c)
+    {
+        int w = frame.Width, h = frame.Height;
+        int x0 = Math.Clamp(scale.MapX(c.CropLeft), 0, w);
+        int height = Math.Min(h, scale.SizeY(c.CropHeight));
+        int ty0 = Math.Clamp(scale.MapY(c.TextRows[0]), 0, h - 1), ty1 = Math.Clamp(scale.MapY(c.TextRows[1]), 0, h - 1);
+        int maxGap = scale.SizeX(c.MaxGap);
+        var px = frame.Pixels;
+        int stride = w * 4, last = -1;
+        for (int x = x0; x < w; x++)
+        {
+            if (x - (last < 0 ? x0 : last) > maxGap) break;
+            for (int y = ty0; y <= ty1; y++)
+            {
+                int i = y * stride + x * 4;
+                if (px[i + 2] >= c.TextMinRG && px[i + 1] >= c.TextMinRG && px[i] <= c.TextMaxB) { last = x; break; }
+            }
+        }
+        int right = last < 0 ? x0 + scale.SizeX(c.FallbackWidth) : last + 1 + scale.SizeX(c.Margin);
+        right = Math.Clamp(right, x0, w);
+        return new Rectangle(x0, 0, right - x0, height);
+    }
+}
 
-    readonly ExpCardConfig _c;
-    readonly ExpCardMatcher _matcher;
+/// <summary>
+/// A timed buff's alert (second/third line of the kill row): "บัพมอน 300 ตัว ครบ 30 นาทีแล้ว" (EXP card)
+/// and "บัพจับมือ ครบ 60 นาทีแล้ว" (handshake). Once the buff was seen, it fires once when it has been
+/// absent for AbsentSeconds of continuous polls (any poll that sees it restarts the wait: cursor over
+/// the icon, flicker). Re-arms only when the buff is seen again. "ตอนนี้": มีบัพ / ไม่มีบัพ. Not part
+/// of the "อ่านค่าไม่ได้" rule (no buff is a normal state).
+/// </summary>
+public sealed class BuffDetector : IHudDetector, IArmedState
+{
+    public const string HaveText = "มีบัพ";
+    public const string NoneText = "ไม่มีบัพ";
+
+    readonly string _id;
+    readonly BuffConfig _c;
+    readonly BuffBarConfig _bar;
+    readonly BuffMatcher _matcher;
     readonly HudReadings _readings;
     bool _armed;            // seen since the last alert
     DateTime? _absentSince;
     int _absentPolls;
 
-    public ExpCardDetector(WatcherConfig config, HudReadings readings)
+    public BuffDetector(string alertId, BuffConfig config, BuffBarConfig bar, HudReadings readings)
     {
-        _c = config.ExpCard;
-        _matcher = new ExpCardMatcher(_c);
+        _id = alertId;
+        _c = config;
+        _bar = bar;
+        _matcher = new BuffMatcher(config, alertId);
         _readings = readings;
     }
 
-    public ExpCardMatcher Matcher => _matcher;
+    public static BuffDetector ExpCard(WatcherConfig config, HudReadings readings) => new(AlertIds.ExpCard, config.ExpCard, config.BuffBar, readings);
+    public static BuffDetector Handshake(WatcherConfig config, HudReadings readings) => new(AlertIds.Handshake, config.Handshake, config.BuffBar, readings);
+
+    public string AlertId => _id;
+    public BuffMatcher Matcher => _matcher;
 
     public void Process(Frame frame, HudScale scale, DateTime now, List<WatchEvent> events)
     {
         if (Update(_matcher.IsPresent(frame, scale), now))
-            events.Add(new WatchEvent(WatchEventKind.Hud, _c.Message, now, AlertIds.ExpCard, _matcher.CropRect(frame.Width, frame.Height, scale)));
+            events.Add(new WatchEvent(WatchEventKind.Hud, _c.Message, now, _id, BuffBar.CropRect(frame, scale, _bar)));
     }
 
     /// <summary>Logic only (tests): one poll. Returns true when the alert fires.</summary>
@@ -156,18 +192,18 @@ public sealed class ExpCardDetector : IHudDetector, IArmedState
                 fire = true;
             }
         }
-        if (present) _readings.Set(AlertIds.ExpCard, HaveText);
-        else if (_absentPolls >= _c.NoCardAfterPolls) _readings.Set(AlertIds.ExpCard, NoneText);
+        if (present) _readings.Set(_id, HaveText);
+        else if (_absentPolls >= _c.NoCardAfterPolls) _readings.Set(_id, NoneText);
         return fire;
     }
 
-    public void CopyArmed(IDictionary<string, bool> into) => into[AlertIds.ExpCard] = _armed;
+    public void CopyArmed(IDictionary<string, bool> into) => into[_id] = _armed;
 
     /// <summary>Frames stopped: the absence wait starts again (paused time does not count); armed is kept.</summary>
     public void Reset()
     {
         _absentSince = null;
         _absentPolls = 0;
-        _readings.Set(AlertIds.ExpCard, RowReading.None);
+        _readings.Set(_id, RowReading.None);
     }
 }

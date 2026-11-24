@@ -232,11 +232,14 @@ public sealed class MainForm : Form
             {
                 row.AlertEnabled = _settings.IsAlertEnabled(spec.Id);
                 _watcher.Options.SetEnabled(spec.Id, row.AlertEnabled);
-                if (spec.SubId is { } subId)
+                foreach (var sub in spec.Subs ?? [])
                 {
-                    row.SubAlertEnabled = _settings.IsAlertEnabled(subId);
-                    _watcher.Options.SetEnabled(subId, row.SubAlertEnabled);
-                    row.SubAlertToggled += (r, on) =>
+                    row.SetSubAlertEnabled(sub.Id, _settings.IsAlertEnabled(sub.Id));
+                    _watcher.Options.SetEnabled(sub.Id, row.GetSubAlertEnabled(sub.Id));
+                }
+                if (spec.Subs is { Length: > 0 })
+                {
+                    row.SubAlertToggled += (r, subId, on) =>
                     {
                         _settings.SetAlertEnabled(subId, on);
                         _watcher.Options.SetEnabled(subId, on);
@@ -717,8 +720,8 @@ public sealed class MainForm : Form
                     else if (r.Spec.Id == AlertIds.InventoryFull) r.SetNow(now.Text, now.Reached ? Theme.WarnValue : null);
                     else if (r.Spec.Id == AlertIds.WarPillar) r.SetNowList(now.Text, separator: " · ");
                     else r.SetNow(now.Text);
-                    string? subText = r.Spec.SubId is { } subId ? _watcher.Readings.Get(subId).Text : null;
-                    if (subText is not null) r.SetSubNow(subText);
+                    foreach (var sub in r.Spec.Subs ?? [])
+                        r.SetSubNow(sub.Id, _watcher.Readings.Get(sub.Id).Text);
                     if (_noSend)
                     {
                         string line = now.Text + (now.Reached ? " (reached)" : "") + (now.TwoFound ? " (two)" : "");
@@ -727,10 +730,12 @@ public sealed class MainForm : Form
                             _loggedRows[r.Spec.Id] = line;
                             _log.Write($"Row {r.Spec.Id}: {line}");
                         }
-                        if (subText is not null && (!_loggedRows.TryGetValue(r.Spec.SubId!, out var lastSub) || lastSub != subText))
+                        foreach (var sub in r.Spec.Subs ?? [])
                         {
-                            _loggedRows[r.Spec.SubId!] = subText;
-                            _log.Write($"Row {r.Spec.SubId}: {subText}");
+                            string subText = _watcher.Readings.Get(sub.Id).Text;
+                            if (_loggedRows.TryGetValue(sub.Id, out var lastSub) && lastSub == subText) continue;
+                            _loggedRows[sub.Id] = subText;
+                            _log.Write($"Row {sub.Id}: {subText}");
                         }
                     }
                     break;

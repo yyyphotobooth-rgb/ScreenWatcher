@@ -120,8 +120,11 @@ public static class AlertIds
     public const string ShieldPotions = "shieldPotions";
     public const string SpPotions = "spPotions";
     public const string Kill300 = "kill300";
-    /// <summary>Sub-alert on the kill row: the EXP card left the buff bar.</summary>
+    /// <summary>Sub-alert on the kill row: the EXP card buff ("บัพมอน 300 ตัว") left the buff bar.
+    /// Id kept from 1.2 (was "บัตร exp ครบ 30 นาที") so the saved on/off carries over.</summary>
     public const string ExpCard = "expCard";
+    /// <summary>Third line of the kill row: the handshake buff ("บัพจับมือ") left the buff bar.</summary>
+    public const string Handshake = "handshake";
     public const string InventoryFull = "inventoryFull";
     public const string LevelUp = "levelUp";
     public const string ExpStall = "expStall";
