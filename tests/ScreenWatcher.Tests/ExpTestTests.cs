@@ -514,10 +514,11 @@ public class ExpTestTests(ITestOutputHelper output)
             Service = new ExpTestService(Runner, new ExpTestStore(Root), m => { lock (Sent) Sent.Add(m); return true; }, null, 10, () => T0.AddSeconds(T)) { Synchronous = true };
             Handler = new ExpCommandHandler(Service, () => 42UL, 10, 1, 120);
         }
+        public bool Flat;   // the percentage never moves
         public void Poll(int polls)
         {
             for (int i = 0; i < polls; i++, T++)
-                Runner.OnPoll(T0.AddSeconds(T), new LevelLine(88, 5000 + T), KillObservation.Unreadable, false, () => (new BgraImage(new byte[16], 2, 2), null));
+                Runner.OnPoll(T0.AddSeconds(T), new LevelLine(88, Flat ? 5000 : 5000 + T), KillObservation.Unreadable, false, () => (new BgraImage(new byte[16], 2, 2), null));
         }
         public async Task WaitStarted()
         {
@@ -610,7 +611,7 @@ public class ExpTestTests(ITestOutputHelper output)
         g.Poll(1);                                              // the next stable reading is the end
         var m = Assert.Single(g.Sent);
         Assert.Equal(ExpTestService.AlertId, m.AlertId);
-        Assert.StartsWith("ทดสอบ EXP จบ · 18 นาที\nได้ +10.81% (Lv.88 50.01% → Lv.88 60.82%)\nเฉลี่ย 0.60% ต่อนาที\n", m.Text);
+        Assert.StartsWith("ทดสอบ EXP จบ · 18 นาที\nหยุดก่อนกำหนด (ทดสอบ 18 จาก 30 นาที)\nได้ +10.81% (Lv.88 50.01% → Lv.88 60.82%)\nเฉลี่ย 0.60% ต่อนาที\n", m.Text);
         Assert.NotNull(m.Png);
         Assert.Equal(ExpPhase.Idle, g.Runner.Phase);
         var saved = File.ReadAllText(Path.Combine(g.Root, "20261119_140001.json"));
@@ -618,19 +619,19 @@ public class ExpTestTests(ITestOutputHelper output)
         var list = await Command(g, "list");
         Assert.Equal(["defer", "file:" + ExpTexts.ListCaption], list.Calls);
         // The whole normal end message (ExpTexts.Result): 10.81 % over 1081 s.
-        Assert.Equal("ทดสอบ EXP จบ · 18 นาที\nได้ +10.81% (Lv.88 50.01% → Lv.88 60.82%)\nเฉลี่ย 0.60% ต่อนาที\n"
+        Assert.Equal("ทดสอบ EXP จบ · 18 นาที\nหยุดก่อนกำหนด (ทดสอบ 18 จาก 30 นาที)\nได้ +10.81% (Lv.88 50.01% → Lv.88 60.82%)\nเฉลี่ย 0.60% ต่อนาที\n"
             + "เวลาต่อ 1 เลเวล (Lv.88) : ราว 2 ชม. 47 นาที\nเหลืออีกราว 1 ชม. 5 นาที จะเลเวลอัพ\nยิงมอน ไม่ทราบ", m.Text);
     }
 
     [Fact]
-    public async Task Exp_stop_under_one_minute_is_dropped_and_while_starting_too()
+    public async Task Exp_stop_under_one_minute_says_too_little_data_and_while_starting_too()
     {
         using var g = new ServiceRig();
         await StartThirty(g);
         g.Poll(30);
         var stop = await Command(g, "stop");
-        Assert.Equal(["defer", "followup:" + ExpTexts.StopTooShort], stop.Calls);
-        Assert.Equal("หยุดทดสอบ EXP แล้ว วัดได้ไม่ถึง 1 นาที สั้นเกินไป ไม่เก็บผล", ExpTexts.StopTooShort);
+        Assert.Equal(["defer", "followup:" + ExpTexts.StopTooShort(30)], stop.Calls);
+        Assert.Equal("ข้อมูลน้อยเกินไป คำนวณไม่ได้\nหยุดก่อนกำหนด (ทดสอบ 0 จาก 30 นาที)", ExpTexts.StopTooShort(30));
         Assert.Equal(ExpPhase.Idle, g.Runner.Phase);
         g.Poll(120);
         Assert.Empty(g.Sent);
@@ -640,9 +641,74 @@ public class ExpTestTests(ITestOutputHelper output)
         var start = g.Handler.HandleAsync(new FakeInteraction("exp", 42, "5"));
         await g.WaitStarted();
         var stop2 = await Command(g, "stop");
-        Assert.Equal(["defer", "followup:" + ExpTexts.StopTooShort], stop2.Calls);
+        Assert.Equal(["defer", "followup:" + ExpTexts.StopTooShort(5)], stop2.Calls);
         await start;
         Assert.Equal(ExpPhase.Idle, g.Runner.Phase);
+    }
+
+    [Fact]
+    public async Task Exp_stop_6_of_10_minutes_gives_a_partial_report_with_the_early_stop_line()
+    {
+        using var g = new ServiceRig();
+        var t = g.Service.StartAsync(10, ExpTestService.SourceButton);
+        g.Poll(2);
+        await t;
+        g.Poll(6 * 60);
+        g.Sent.Clear();
+        Assert.Equal(ExpTexts.Stopping(6), g.Service.Stop(ExpTestService.SourceButton));
+        g.Poll(1);
+        var m = g.Sent[^1];
+        Assert.StartsWith("ทดสอบ EXP จบ · 6 นาที\nหยุดก่อนกำหนด (ทดสอบ 6 จาก 10 นาที)\nได้ +", m.Text);
+        Assert.Contains("เฉลี่ย ", m.Text);
+        Assert.Contains("เวลาต่อ 1 เลเวล", m.Text);
+        Assert.NotNull(m.Png);
+    }
+
+    [Fact]
+    public async Task Exp_stop_at_30_seconds_or_with_unchanged_exp_says_too_little_data_and_stores_nothing()
+    {
+        // 30 s through the button: the channel gets the text.
+        using var g = new ServiceRig();
+        var t = g.Service.StartAsync(10, ExpTestService.SourceButton);
+        g.Poll(2);
+        await t;
+        g.Poll(30);
+        g.Sent.Clear();
+        string reply = g.Service.Stop(ExpTestService.SourceButton);
+        Assert.Equal("ข้อมูลน้อยเกินไป คำนวณไม่ได้\nหยุดก่อนกำหนด (ทดสอบ 0 จาก 10 นาที)", reply);
+        Assert.Equal([reply], g.Sent.Select(m => m.Text));
+
+        // EXP unchanged after 6 minutes: same text, no numbers, no image, no stored file.
+        using var f = new ServiceRig { Flat = true };
+        t = f.Service.StartAsync(10, ExpTestService.SourceButton);
+        f.Poll(2);
+        await t;
+        f.Poll(6 * 60);
+        f.Sent.Clear();
+        f.Service.Stop(ExpTestService.SourceButton);
+        f.Poll(1);
+        var m = f.Sent[^1];
+        Assert.Equal("ข้อมูลน้อยเกินไป คำนวณไม่ได้\nหยุดก่อนกำหนด (ทดสอบ 6 จาก 10 นาที)", m.Text);
+        Assert.Null(m.Png);
+        Assert.False(Directory.Exists(f.Root) && Directory.GetFiles(f.Root, "*.json").Length > 0);
+    }
+
+    [Fact]
+    public void Exp_stop_from_the_button_and_from_discord_do_the_same()
+    {
+        string[] Run(string source)
+        {
+            using var g = new ServiceRig();
+            var t = g.Service.StartAsync(10, source);
+            g.Poll(2);
+            t.GetAwaiter().GetResult();
+            g.Poll(6 * 60);
+            g.Sent.Clear();
+            string reply = g.Service.Stop(source);
+            g.Poll(1);
+            return [reply, g.Sent[^1].Text];
+        }
+        Assert.Equal(Run(ExpTestService.SourceButton), Run(ExpTestService.SourceDiscord));
     }
 
     [Fact]

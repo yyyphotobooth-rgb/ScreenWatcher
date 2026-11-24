@@ -34,10 +34,16 @@ public sealed record ExpFlags(bool LevelUp, bool Died, bool GameDropped, bool Ma
 public sealed record ExpResult(string Id, string Source, int Minutes, ExpReading Start, ExpReading? End, int? Kills, ExpFlags Flags,
     MapCompare? Map)
 {
-    public bool Usable => End is not null;
+    public bool Usable => End is not null && !TooLittle;
 
-    /// <summary>Ended early by "/exp stop" (Minutes = the minutes measured).</summary>
+    /// <summary>Ended early by "/exp stop" or the window's stop button (Minutes = the minutes measured).</summary>
     public bool Stopped { get; init; }
+
+    /// <summary>The minutes the test was asked for (the Y of "ทดสอบ X จาก Y นาที").</summary>
+    public int PlannedMinutes { get; init; }
+
+    /// <summary>A stopped test with no end reading or no EXP change: no numbers are given.</summary>
+    public bool TooLittle => Stopped && (End is null || GainHundredths == 0);
     public bool Comparable => Usable && !Flags.NotComparable;
 
     /// <summary>(level_end - level_start) * 100 + pct_end - pct_start, in hundredths of a percent.</summary>
@@ -75,7 +81,10 @@ public static class ExpTexts
     public const string NothingToCancel = "ไม่มีการทดสอบ EXP ที่กำลังทำอยู่";
     public const string NothingToStop = NothingToCancel;
     public static string Stopping(int minutes) => $"หยุดทดสอบ EXP แล้ว กำลังสรุปผลจาก {minutes} นาทีที่วัดได้";
-    public const string StopTooShort = "หยุดทดสอบ EXP แล้ว วัดได้ไม่ถึง 1 นาที สั้นเกินไป ไม่เก็บผล";
+    public const string TooLittle = "ข้อมูลน้อยเกินไป คำนวณไม่ได้";
+    public static string EarlyStop(int measured, int planned) => $"หยุดก่อนกำหนด (ทดสอบ {measured} จาก {planned} นาที)";
+    /// <summary>Stopped with under 1 minute measured (or still starting): no numbers.</summary>
+    public static string StopTooShort(int planned) => TooLittle + "\n" + EarlyStop(0, planned);
     public const string StopAlreadyEnding = "ทดสอบ EXP ครบเวลาแล้ว กำลังสรุปผลอยู่";
     public const string ListEmpty = "ยังไม่มีผลทดสอบ EXP ที่ใช้เทียบได้";
     public const string ListCaption = "ผลเทียบกันได้เฉพาะที่เลเวลเดียวกัน และไม่ได้อยู่ในช่วงโบนัส EXP";
@@ -98,7 +107,9 @@ public static class ExpTexts
 
     public static string Result(ExpResult r)
     {
+        if (r.TooLittle) return TooLittle + "\n" + EarlyStop(r.Minutes, r.PlannedMinutes);
         var lines = new List<string> { $"ทดสอบ EXP จบ · {r.Minutes} นาที" };
+        if (r.Stopped) lines.Add(EarlyStop(r.Minutes, r.PlannedMinutes));
         if (r.End is { } e)
         {
             lines.Add($"ได้ {SignedPct(r.GainHundredths!.Value)} ({r.Start.Text} → {e.Text})");
@@ -245,30 +256,32 @@ public sealed class ExpTestRunner
     /// <see cref="Finished"/>), with the minutes actually measured. Under MinStopMinutes measured
     /// (or still starting): dropped like a cancel. Minutes: the measured minutes (Stopping).
     /// </summary>
-    public (ExpStopStatus Status, int Minutes) Stop(DateTime now)
+    public (ExpStopStatus Status, int Minutes, int Planned) Stop(DateTime now)
     {
         TaskCompletionSource<ExpStartOutcome>? tcs = null;
-        (ExpStopStatus, int) r;
+        (ExpStopStatus, int, int) r;
+        int planned;
         lock (_gate)
         {
             switch (_phase)
             {
-                case ExpPhase.Idle: return (ExpStopStatus.NotRunning, 0);
-                case ExpPhase.Finishing: return (ExpStopStatus.AlreadyEnding, _minutes);
+                case ExpPhase.Idle: return (ExpStopStatus.NotRunning, 0, 0);
+                case ExpPhase.Finishing: return (ExpStopStatus.AlreadyEnding, _minutes, _minutes);
                 case ExpPhase.Running when now - _start!.Time >= TimeSpan.FromMinutes(MinStopMinutes):
                     _stopped = true;
                     _endAt = now;
                     SetPhase(ExpPhase.Finishing);
-                    r = (ExpStopStatus.Stopping, MeasuredMinutes(now - _start.Time));
+                    r = (ExpStopStatus.Stopping, MeasuredMinutes(now - _start.Time), _minutes);
                     break;
                 default:
                     tcs = _phase == ExpPhase.Starting ? _startTcs : null;
+                    planned = _minutes;
                     Clear();
-                    r = (ExpStopStatus.TooShort, 0);
+                    r = (ExpStopStatus.TooShort, 0, planned);
                     break;
             }
         }
-        tcs?.TrySetResult(new ExpStartOutcome(ExpStartStatus.Refused, ExpTexts.StopTooShort));
+        tcs?.TrySetResult(new ExpStartOutcome(ExpStartStatus.Refused, ExpTexts.StopTooShort(r.Item3)));
         return r;
     }
 
@@ -412,7 +425,7 @@ public sealed class ExpTestRunner
         var flags = new ExpFlags(end is not null && end.Level > start.Level, _died, _dropped, map is { Comparable: true, Why: "name" }, _paused);   // only the map NAME decides; zone moves inside a map are normal
         // Stopped early: the minutes actually measured (between the two readings, or up to the stop).
         int minutes = _stopped ? MeasuredMinutes((end?.Time ?? _endAt) - start.Time) : _minutes;
-        var r = new ExpResult(start.Time.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture), _source, minutes, start, end, kills, flags, map) { Stopped = _stopped };
+        var r = new ExpResult(start.Time.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture), _source, minutes, start, end, kills, flags, map) { Stopped = _stopped, PlannedMinutes = _minutes };
         Clear();
         return r;
     }

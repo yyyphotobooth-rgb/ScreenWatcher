@@ -84,7 +84,7 @@ public sealed class ExpTestService : IExpTests, IDisposable
 
     public string Stop(string source)
     {
-        var (status, minutes) = _runner.Stop(_clock());
+        var (status, minutes, planned) = _runner.Stop(_clock());
         _journal?.Write("exp_test", ("event", status switch
         {
             ExpStopStatus.Stopping => "stop",
@@ -95,10 +95,11 @@ public sealed class ExpTestService : IExpTests, IDisposable
         string text = status switch
         {
             ExpStopStatus.Stopping => ExpTexts.Stopping(minutes),
-            ExpStopStatus.TooShort => ExpTexts.StopTooShort,
+            ExpStopStatus.TooShort => ExpTexts.StopTooShort(planned),
             ExpStopStatus.AlreadyEnding => ExpTexts.StopAlreadyEnding,
             _ => ExpTexts.NothingToStop,
         };
+        // Discord: the command's own reply carries the text. Button: the channel gets it. (A too-short stop is the final message.)
         if (source != SourceDiscord && status is ExpStopStatus.Stopping or ExpStopStatus.TooShort) Send(text, null);
         return text;
     }
@@ -121,8 +122,11 @@ public sealed class ExpTestService : IExpTests, IDisposable
         string? file = null;
         try
         {
-            png = ExpTestImages.Result(r);
-            file = _store.Save(r, png);
+            if (!r.TooLittle)   // a stopped test with no usable change: text only, nothing stored
+            {
+                png = ExpTestImages.Result(r);
+                file = _store.Save(r, png);
+            }
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or ExternalException) { }
         _journal?.Write("exp_test", ("event", "result"), ("id", r.Id), ("source", r.Source), ("minutes", r.Minutes),

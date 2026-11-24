@@ -651,7 +651,7 @@ public sealed class MainForm : Form
     {
         if (_watcher.ExpTest.Phase != ExpPhase.Idle)
         {
-            _lastAlert.Text = _exp.Cancel(ExpTestService.SourceButton);
+            _lastAlert.Text = _exp.Stop(ExpTestService.SourceButton);
             UpdateExpButton();
             return;
         }
@@ -668,9 +668,9 @@ public sealed class MainForm : Form
         var r = _watcher.ExpTest;
         string text = r.Phase switch
         {
-            ExpPhase.Starting => "กำลังอ่านค่า EXP... (กดเพื่อยกเลิก)",
-            ExpPhase.Running => $"ยกเลิกทดสอบ EXP · เหลือ {ExpTexts.Clock(r.TimeLeft(DateTime.Now) ?? TimeSpan.Zero)}",
-            ExpPhase.Finishing => "กำลังสรุปผลทดสอบ EXP... (กดเพื่อยกเลิก)",
+            ExpPhase.Starting => "กำลังอ่านค่า EXP... (กดเพื่อหยุด)",
+            ExpPhase.Running => $"หยุดทดสอบ · เหลือ {ExpTexts.Clock(r.TimeLeft(DateTime.Now) ?? TimeSpan.Zero)}",
+            ExpPhase.Finishing => "กำลังสรุปผลทดสอบ EXP...",
             _ => $"ทดสอบ EXP · {_config.ExpTest.DefaultMinutes} นาที",
         };
         if (_expButton.Text != text) { _expButton.Text = text; _expButton.Invalidate(); }

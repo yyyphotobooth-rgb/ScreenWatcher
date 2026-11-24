@@ -45,7 +45,7 @@ public sealed class ExpCommandHandler(IExpTests exp, Func<ulong?> chosenChannelI
         {
             await i.DeferAsync();
             string text = exp.Stop(ExpTestService.SourceDiscord);
-            Report(text == ExpTexts.StopTooShort ? "stop_short" : text == ExpTexts.NothingToStop ? "stop_none"
+            Report(text.StartsWith(ExpTexts.TooLittle, StringComparison.Ordinal) ? "stop_short" : text == ExpTexts.NothingToStop ? "stop_none"
                 : text == ExpTexts.StopAlreadyEnding ? "stop_ending" : "stop");
             await i.FollowupAsync(text);
             return true;
