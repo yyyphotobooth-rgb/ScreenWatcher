@@ -70,14 +70,24 @@ public sealed class AppSettings
             if (File.Exists(path))
             {
                 var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Options) ?? new();
-                s.AlertsEnabled = new Dictionary<string, bool>(s.AlertsEnabled ?? [], StringComparer.OrdinalIgnoreCase);
-                s.Thresholds = new Dictionary<string, int>(s.Thresholds ?? [], StringComparer.OrdinalIgnoreCase);
-                s.WatchRight = new Dictionary<string, bool>(s.WatchRight ?? [], StringComparer.OrdinalIgnoreCase);
+                s.AlertsEnabled = IgnoreCase(s.AlertsEnabled);
+                s.Thresholds = IgnoreCase(s.Thresholds);
+                s.WatchRight = IgnoreCase(s.WatchRight);
                 return s;
             }
         }
-        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { }
+        // Any unreadable, old or broken file means defaults: settings must never stop the app starting.
+        catch (Exception) { }
         return new();
+    }
+
+    /// <summary>Case-insensitive copy; keys differing only in case ("death"/"Death") keep the last one
+    /// instead of throwing.</summary>
+    static Dictionary<string, T> IgnoreCase<T>(Dictionary<string, T>? source)
+    {
+        var d = new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (k, v) in source ?? []) if (k is not null) d[k] = v;
+        return d;
     }
 
     public void Save(string path)

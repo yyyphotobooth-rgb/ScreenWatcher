@@ -96,5 +96,9 @@ Discord bot (Discord.Net, runs inside the app).
   automatically (`git push origin main`, code backup only), without asking.
 - Before every push, list the files changed since origin/main and stop and report (do not push) if
   one is over 50 MB, matches the exclusions below, or contains a token, key or other secret.
-- release = only if the owner typed "release": create GitHub release vX.Y.Z from the csproj version with the signed dist exe; requires a prior test by the owner. Attach BOTH `ScreenWatcher.exe` and `ScreenWatcher.exe.sig` (exact names; the in-app updater ignores a release without both).
+- release = only if the owner typed "release": create GitHub release vX.Y.Z from the csproj version with the signed dist exe; requires a prior test by the owner.
+  Before any release, launch the built `dist\ScreenWatcher.exe --no-send` for 20 s (with
+  `SCREENWATCHER_DATA` pointing to a scratch copy, never the real data) and confirm the main window
+  opens and `app_start` is logged in that folder's journal (1.3.0 shipped crashing in the window's
+  constructor; unit tests alone did not catch it). Attach BOTH `ScreenWatcher.exe` and `ScreenWatcher.exe.sig` (exact names; the in-app updater ignores a release without both).
 - Never push tokens, signing keys, samples/, dist/, bin/, obj/. Never force-push, delete branches, or delete releases.

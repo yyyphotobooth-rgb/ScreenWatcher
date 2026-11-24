@@ -145,19 +145,24 @@ sealed class AlertRow : Control
 
         if (spec.Subs is { Length: > 0 } subs && spec.Implemented)
         {
-            _subCheck = new DarkCheck[subs.Length];
-            _subLabel = new Label[subs.Length];
-            _subNow = new Label[subs.Length];
+            // Build every line first and add them in one go: Controls.AddRange runs OnLayout, which
+            // walks ALL of _subCheck/_subLabel/_subNow (adding line by line crashed 1.3.0 with 2 lines).
+            var subCheck = new DarkCheck[subs.Length];
+            var subLabel = new Label[subs.Length];
+            var subNow = new Label[subs.Length];
+            var added = new List<Control>(subs.Length * 3);
             for (int i = 0; i < subs.Length; i++)
             {
                 var sub = subs[i];
-                var check = _subCheck[i] = new DarkCheck { AccessibleName = sub.Label };
-                var label = _subLabel[i] = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft, UseMnemonic = false, Text = sub.Label, Font = Theme.Body };
-                _subNow[i] = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleRight, UseMnemonic = false, Text = "—", Font = Theme.Value };
+                var check = subCheck[i] = new DarkCheck { AccessibleName = sub.Label };
+                var label = subLabel[i] = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft, UseMnemonic = false, Text = sub.Label, Font = Theme.Body };
+                subNow[i] = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleRight, UseMnemonic = false, Text = "—", Font = Theme.Value };
                 label.Click += (_, _) => check.Checked = !check.Checked;
                 check.CheckedChanged += (_, _) => SubAlertToggled?.Invoke(this, sub.Id, check.Checked);
-                Controls.AddRange([check, label, _subNow[i]]);
+                added.AddRange([check, label, subNow[i]]);
             }
+            (_subCheck, _subLabel, _subNow) = (subCheck, subLabel, subNow);
+            Controls.AddRange([.. added]);
         }
 
         if (spec.Implemented)
